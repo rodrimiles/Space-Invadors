@@ -22,6 +22,7 @@
     const socket = io();
 
     // Variáveis do jogador
+    //aa
     const player = {
       x: canvas.width / 2 - 20,
       y: canvas.height - 50,
