@@ -10,10 +10,26 @@
       display: block;
       margin: 0 auto;
     }
+    #shop {
+      text-align: center;
+      margin-top: 20px;
+    }
+    .powerup {
+      display: inline-block;
+      margin: 10px;
+      padding: 10px;
+      border: 1px solid #fff;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
   <canvas id="gameCanvas" width="800" height="600"></canvas>
+  <div id="shop">
+    <div class="powerup" onclick="buyPowerup('speed')">Speed Boost</div>
+    <div class="powerup" onclick="buyPowerup('shield')">Shield</div>
+    <div class="powerup" onclick="buyPowerup('doubleShot')">Double Shot</div>
+  </div>
   <!-- Socket.io -->
   <script src="/socket.io/socket.io.js"></script>
   <script>
@@ -22,14 +38,30 @@
     const socket = io();
 
     // Variáveis do jogador
-    //aa
     const player = {
       x: canvas.width / 2 - 20,
       y: canvas.height - 50,
       width: 40,
       height: 20,
-      speed: 5
+      speed: 5,
+      powerups: {
+        speed: false,
+        shield: false,
+        doubleShot: false
+      }
     };
+
+    // Função para comprar power-ups
+    function buyPowerup(type) {
+      if (type === 'speed') {
+        player.powerups.speed = true;
+        player.speed = 10;
+      } else if (type === 'shield') {
+        player.powerups.shield = true;
+      } else if (type === 'doubleShot') {
+        player.powerups.doubleShot = true;
+      }
+    }
 
     // Objetos para jogadores remotos
     let remotePlayers = {};
@@ -46,7 +78,8 @@
           y: 50 + j * 40,
           width: 40,
           height: 20,
-          alive: true
+          alive: true,
+          direction: 1
         });
       }
     }
@@ -73,7 +106,7 @@
         // Envia para os outros jogadores
         socket.emit('playerShoot', { x: bullet.x, y: bullet.y });
       }
-      if(moved){
+      if (moved) {
         // Envia nova posição para os outros
         socket.emit('playerMove', { x: player.x, y: player.y });
       }
@@ -103,6 +136,17 @@
       invaders.forEach(invader => {
         if (invader.alive) {
           ctx.fillRect(invader.x, invader.y, invader.width, invader.height);
+        }
+      });
+    }
+
+    // Atualiza a posição dos invaders
+    function updateInvaders() {
+      invaders.forEach(invader => {
+        invader.x += invader.direction * 2;
+        if (invader.x + invader.width > canvas.width || invader.x < 0) {
+          invader.direction *= -1;
+          invader.y += 20;
         }
       });
     }
@@ -156,6 +200,9 @@
         ctx.fillStyle = 'red';
         ctx.fillRect(rp.x, rp.y, player.width, player.height);
       }
+      
+      // Atualiza a posição dos invaders
+      updateInvaders();
       
       requestAnimationFrame(draw);
     }
