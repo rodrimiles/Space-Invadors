@@ -11,7 +11,7 @@ io.on('connection', (socket) => {
 
   // Receive player movement and broadcast to others
   socket.on('playerMove', (data) => {
-    socket.broadcast.emit('updatePlayer', { id: socket.id, data });
+    socket.broadcast.emit('updaePlayer', { id: socket.id, data });
   });
 
   // Receive player shoot and broadcast to others
@@ -26,6 +26,6 @@ io.on('connection', (socket) => {
   });
 });
 
-http.listen(3000, () => {
+http.listen(3000, () => { 
   console.log('Server running on port 3000');
 });
