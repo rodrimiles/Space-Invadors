@@ -14,7 +14,7 @@ function selectMultiplayer(option) {
     gameMode = "multiplayer_online";
     document.getElementById("multiplayerOptions").style.display = "none";
     document.getElementById("waitingScreen").style.display = "block";
-    // Online functionality not implemented in this demo.
+    // Online functionality not implemented.
   } else if (option === "local") {
     gameMode = "multiplayer_local";
     startGame();
@@ -47,16 +47,26 @@ let gamePaused = false;
 let invaderLevel = 1;
 let invaderSpeed = 2;
 let invaderDirection = 1;  // for regular invaders
-let bossDirection = 1;     // separate direction for boss oscillation
+let bossDirection = 1;     // for boss oscillation
 let teamScore = 0;
 let verticalDirection = 1; // for vertical oscillation of bots
 let verticalMoveCount = 0;
 let nextLevelScheduled = false;
 
-// Powerups – speed boost now lasts for 1 shot round; double shot lasts 2 rounds; shield lasts 10 seconds.
-const powerups = { speed: 0, shield: false, doubleShot: 0 };
+// Powerup variables
+let normalSpeedBoost = 0;   // lasts for 1 shot round
+let normalDoubleShot = 0;   // lasts for 2 shot rounds
+let shieldActive = false;   // normal shield flag
+// New speedy powerups: no cooldown and extra bullets for 5 seconds.
+let speedyDoubleActive = false;
+let speedyTripleActive = false;
+let speedyExpire = 0; // timestamp when speedy powerup expires
 
-// Player objects (in singleplayer only player1 is used)
+// Default shot cooldown (300ms) applies only if no speedy powerup is active.
+const SHOT_COOLDOWN = 300;
+
+// Player objects
+// In multiplayer, we want: Player1 (controlled with A/D and W to shoot) drawn in cyan, and Player2 (using arrow keys and Enter to shoot) drawn in white.
 let player1, player2;
 
 // Barriers – 3 barriers with 10 health each
@@ -77,7 +87,7 @@ function updateInfoDisplay() {
   if (gameMode === "singleplayer") {
     document.getElementById('lives').innerText = `Lives: ${player1.lives}`;
   } else {
-    // In multiplayer, player using arrows (player1) is drawn in cyan, player using A/D (player2) in white.
+    // In multiplayer: Player1 (A/D, shoot with W) drawn in cyan, Player2 (arrow keys, shoot with Enter) drawn in white.
     document.getElementById('lives').innerText = `P1 Lives: ${player1.lives} | P2 Lives: ${player2.lives}`;
   }
   document.getElementById('score').innerText = `Score: ${teamScore}`;
@@ -87,10 +97,9 @@ function updateInfoDisplay() {
 // ----- Shop Powerup Purchase -----
 function buyPowerup(type) {
   if (type === 'speed') {
-    if (teamScore >= 500 && powerups.speed === 0) {
+    if (teamScore >= 500 && normalSpeedBoost === 0) {
       teamScore -= 500;
-      powerups.speed = 1; // lasts for 1 shot round
-      // Boost speed to 10
+      normalSpeedBoost = 1; // lasts for 1 shot round
       player1.speed = 10;
       if (player2) player2.speed = 10;
       updateInfoDisplay();
@@ -98,28 +107,46 @@ function buyPowerup(type) {
       alert("Not enough points for Speed Boost or already active!");
     }
   } else if (type === 'shield') {
-    if (teamScore >= 250 && !powerups.shield) {
+    if (teamScore >= 250 && !shieldActive) {
       teamScore -= 250;
-      powerups.shield = true;
       activateShield();
       updateInfoDisplay();
     } else {
       alert("Not enough points for Shield or already active!");
     }
   } else if (type === 'doubleShot') {
-    if (teamScore >= 1000 && powerups.doubleShot === 0) {
+    if (teamScore >= 1000 && normalDoubleShot === 0) {
       teamScore -= 1000;
-      powerups.doubleShot = 2; // lasts for 2 shot rounds
+      normalDoubleShot = 2; // lasts for 2 shot rounds
       updateInfoDisplay();
     } else {
       alert("Not enough points for Double Shot or already active!");
+    }
+  } else if (type === 'speedyDouble') {
+    if (teamScore >= 100 && !speedyDoubleActive && !speedyTripleActive) {
+      teamScore -= 100;
+      speedyDoubleActive = true;
+      speedyExpire = Date.now() + 5000; // 5 seconds duration
+      updateInfoDisplay();
+    } else {
+      alert("Not enough points for Speedy Double Shot or one already active!");
+    }
+  } else if (type === 'speedyTriple') {
+    if (teamScore >= 300 && !speedyDoubleActive && !speedyTripleActive) {
+      teamScore -= 300;
+      speedyTripleActive = true;
+      speedyExpire = Date.now() + 5000; // 5 seconds duration
+      updateInfoDisplay();
+    } else {
+      alert("Not enough points for Speedy Triple Shot or one already active!");
     }
   }
 }
 
 // ----- Activate Shield -----
-// Shield lasts 10 seconds with a 30-second cooldown.
+// Shield lasts 10 seconds; 30-second cooldown.
 function activateShield() {
+  shieldActive = true;
   if (player1) { player1.shieldActive = true; player1.shieldCooldown = true; }
   if (player2) { player2.shieldActive = true; player2.shieldCooldown = true; }
   document.getElementById('shieldCooldown').style.display = 'block';
@@ -135,6 +162,7 @@ function activateShield() {
     }
   }, 1000);
   setTimeout(() => {
+    shieldActive = false;
     if (player1) player1.shieldActive = false;
     if (player2) player2.shieldActive = false;
   }, 10000);
@@ -164,12 +192,13 @@ function toggleFullscreen() {
 }
 
 // ----- Input Handling -----
-// Singleplayer: Arrow keys for movement and Enter (or NumpadEnter) for shooting.
-// Multiplayer_local: Player1 uses Arrow keys/Enter; Player2 uses A/D for movement and Space to shoot.
+// In singleplayer, use Arrow keys and Enter (or NumpadEnter) for shooting.
+// In multiplayer_local:
+//   - Player1 (controlled with A/D for movement and W to shoot)  
+//   - Player2 (controlled with Arrow keys for movement and Enter to shoot)
 const keysP1 = {};
 const keysP2 = {};
 document.addEventListener('keydown', (e) => {
-  // Global shortcuts: Fullscreen (F) and Shop (S)
   if (e.key.toLowerCase() === 'f') toggleFullscreen();
   if (e.key.toLowerCase() === 's') toggleShop();
   
@@ -179,11 +208,13 @@ document.addEventListener('keydown', (e) => {
       keysP1[e.code] = true;
     }
   } else if (gameMode === "multiplayer_local") {
-    if (e.code === "ArrowLeft" || e.code === "ArrowRight" ||
-        e.code === "Enter" || e.code === "NumpadEnter") {
+    // Player1: keys A, D for movement; W for shoot.
+    if (e.code === "KeyA" || e.code === "KeyD" || e.code === "KeyW") {
       keysP1[e.code] = true;
     }
-    if (e.code === "KeyA" || e.code === "KeyD" || e.code === "Space") {
+    // Player2: ArrowLeft, ArrowRight for movement; Enter (or NumpadEnter) for shoot.
+    if (e.code === "ArrowLeft" || e.code === "ArrowRight" ||
+        e.code === "Enter" || e.code === "NumpadEnter") {
       keysP2[e.code] = true;
     }
   }
@@ -195,41 +226,65 @@ document.addEventListener('keyup', (e) => {
       keysP1[e.code] = false;
     }
   } else if (gameMode === "multiplayer_local") {
-    if (e.code === "ArrowLeft" || e.code === "ArrowRight" ||
-        e.code === "Enter" || e.code === "NumpadEnter") {
+    if (e.code === "KeyA" || e.code === "KeyD" || e.code === "KeyW") {
       keysP1[e.code] = false;
     }
-    if (e.code === "KeyA" || e.code === "KeyD" || e.code === "Space") {
+    if (e.code === "ArrowLeft" || e.code === "ArrowRight" ||
+        e.code === "Enter" || e.code === "NumpadEnter") {
       keysP2[e.code] = false;
     }
   }
 });
 
-// ----- Bullets -----
+// ----- Bullet Firing & Cooldown -----
 let bullets = [];
 let invaderBullets = [];
 function shoot(player) {
-  const bullet = { x: player.x + player.width/2, y: player.y, speed: 7 };
-  bullets.push(bullet);
-  // If double shot is active, fire a second bullet and decrement its counter.
-  if (powerups.doubleShot > 0) {
-    const bullet2 = { x: player.x + player.width/2 - 10, y: player.y, speed: 7 };
-    bullets.push(bullet2);
-    powerups.doubleShot--;
+  let now = Date.now();
+  let useCooldown = true;
+  if (speedyDoubleActive || speedyTripleActive) {
+    useCooldown = false;
   }
-  // If speed boost is active, decrement its counter.
-  if (powerups.speed > 0) {
-    powerups.speed--;
-    if (powerups.speed === 0) {
-      // Reset speed to normal (5)
-      player1.speed = 5;
-      if (player2) player2.speed = 5;
+  if (useCooldown) {
+    if (!player.lastShotTime) player.lastShotTime = 0;
+    if (now - player.lastShotTime < SHOT_COOLDOWN) return;
+    player.lastShotTime = now;
+  }
+  if ((speedyDoubleActive || speedyTripleActive) && now > speedyExpire) {
+    speedyDoubleActive = false;
+    speedyTripleActive = false;
+  }
+  
+  if (speedyTripleActive) {
+    // Triple shot: fire 3 bullets (center, left, right)
+    bullets.push({ x: player.x + player.width/2, y: player.y, speed: 7 });
+    bullets.push({ x: player.x + player.width/2 - 15, y: player.y, speed: 7 });
+    bullets.push({ x: player.x + player.width/2 + 15, y: player.y, speed: 7 });
+  } else if (speedyDoubleActive) {
+    // Double shot: fire 2 bullets (center and left)
+    bullets.push({ x: player.x + player.width/2, y: player.y, speed: 7 });
+    bullets.push({ x: player.x + player.width/2 - 15, y: player.y, speed: 7 });
+  } else {
+    // Normal powerups: check for normal double shot
+    if (normalDoubleShot > 0) {
+      bullets.push({ x: player.x + player.width/2, y: player.y, speed: 7 });
+      bullets.push({ x: player.x + player.width/2 - 10, y: player.y, speed: 7 });
+      normalDoubleShot--;
+    } else if (normalSpeedBoost > 0) {
+      bullets.push({ x: player.x + player.width/2, y: player.y, speed: 7 });
+      normalSpeedBoost--;
+      if (normalSpeedBoost === 0) {
+        player1.speed = 5;
+        if (player2) player2.speed = 5;
+      }
+    } else {
+      // Regular single shot.
+      bullets.push({ x: player.x + player.width/2, y: player.y, speed: 7 });
     }
   }
 }
 
 // ----- Invaders & Boss -----
-// Regular invaders arranged in a grid. Boss spawns on levels 5, 10, 15, 20.
 let invaders = [];
 const invaderRows = 3;
 const invaderCols = 10;
@@ -240,7 +295,6 @@ const invaderOffsetTop = 50;
 const invaderOffsetLeft = 50;
 function createInvaders() {
   boss = null;
-  // Spawn boss on designated levels.
   if ([5,10,15,20].includes(invaderLevel)) {
     let bossHealth = 20 + (invaderLevel - 5) * 5;
     boss = { x: canvas.width/2 - 100, y: 50, width: 200, height: 50, alive: true, health: bossHealth };
@@ -249,7 +303,6 @@ function createInvaders() {
     invaders = [];
     for (let i = 0; i < invaderCols; i++) {
       invaders[i] = [];
-      // Bots start with 1 health and gradually get tougher.
       let botHealth = 1 + Math.floor((invaderLevel - 1) / 3);
       for (let j = 0; j < invaderRows; j++) {
         invaders[i][j] = { 
@@ -294,7 +347,6 @@ function drawBoss(boss) {
   ctx.strokeStyle = '#FFFFFF';
   ctx.lineWidth = 3;
   ctx.strokeRect(boss.x, boss.y, boss.width, boss.height);
-  // Draw boss health bar
   ctx.fillStyle = '#FFF';
   ctx.fillRect(boss.x, boss.y - 10, boss.width, 5);
   ctx.fillStyle = '#0F0';
@@ -303,7 +355,6 @@ function drawBoss(boss) {
 }
 function drawInvaders() {
   if (boss) {
-    // If boss is dead, remove it.
     if (!boss.alive) { boss = null; }
     else { drawBoss(boss); }
   } else {
@@ -318,7 +369,6 @@ function drawInvaders() {
 }
 function drawBarriers() {
   barriers.forEach(barrier => {
-    // Change barrier color based on remaining health.
     if (barrier.health >= 8) ctx.fillStyle = '#0f0';
     else if (barrier.health >= 5) ctx.fillStyle = '#ff0';
     else ctx.fillStyle = '#f00';
@@ -331,11 +381,9 @@ function drawBarriers() {
 // ----- Update Functions -----
 function updateInvaders() {
   if (boss) {
-    // Boss moves using its own bossDirection so it oscillates continuously.
     boss.x += bossDirection * invaderSpeed;
     if (boss.x < 0) { boss.x = 0; bossDirection = 1; }
     else if (boss.x + boss.width > canvas.width) { boss.x = canvas.width - boss.width; bossDirection = -1; }
-    // Boss shooting logic
     if (Math.random() < 0.005 * invaderLevel) {
       invaderBullets.push({ x: boss.x + boss.width/2, y: boss.y + boss.height, speed: 4 });
     }
@@ -348,7 +396,6 @@ function updateInvaders() {
           if (invaders[i][j].x + invaderWidth > canvas.width || invaders[i][j].x < 0) {
             edgeReached = true;
           }
-          // Regular invader shooting logic
           if (Math.random() < 0.0015 * invaderLevel) {
             invaderBullets.push({ x: invaders[i][j].x + invaderWidth/2, y: invaders[i][j].y + invaderHeight, speed: 3 });
           }
@@ -371,13 +418,16 @@ function updateInvaders() {
   }
 }
 function updateBullets() {
-  // Update player bullets
+  // Update speedy powerup status
+  if ((speedyDoubleActive || speedyTripleActive) && Date.now() > speedyExpire) {
+    speedyDoubleActive = false;
+    speedyTripleActive = false;
+  }
+  
   for (let i = bullets.length - 1; i >= 0; i--) {
     const bullet = bullets[i];
     bullet.y -= bullet.speed;
-    // Check barrier collisions
     if (checkBarrierCollision(bullet)) { bullets.splice(i,1); continue; }
-    // Check collision with boss
     if (boss && boss.alive &&
         bullet.x > boss.x && bullet.x < boss.x + boss.width &&
         bullet.y > boss.y && bullet.y < boss.y + boss.height) {
@@ -386,7 +436,6 @@ function updateBullets() {
       bullets.splice(i,1);
       continue;
     }
-    // Check collision with regular invaders
     for (let col = 0; col < invaderCols; col++) {
       for (let row = 0; row < invaderRows; row++) {
         const invader = invaders[col][row];
@@ -402,7 +451,6 @@ function updateBullets() {
     }
     if (bullet.y < 0) { bullets.splice(i, 1); }
   }
-  // Update enemy (and boss) bullets
   for (let i = invaderBullets.length - 1; i >= 0; i--) {
     const bullet = invaderBullets[i];
     bullet.y += bullet.speed;
@@ -451,7 +499,6 @@ function checkAllEnemiesDefeated() {
 }
 
 // ----- Next Level & Game Over -----
-// In multiplayer, any dead player is revived with 1 life (max lives = 3)
 function nextLevel() {
   if (gameMode === "multiplayer_local" || gameMode === "multiplayer_online") {
     if (player1.lives === 0) { player1.lives = 1; }
@@ -497,6 +544,10 @@ function leaveGame() {
 }
 
 // ----- Player Movement & Drawing -----
+// For singleplayer, use Arrow keys and Enter for shooting.
+// For multiplayer_local:
+//   - Player1 (controlled with A/D for movement and W to shoot) – drawn in cyan.
+//   - Player2 (controlled with ArrowLeft/ArrowRight for movement and Enter for shooting) – drawn in white.
 function handlePlayerMovement() {
   if (gameMode === "singleplayer") {
     if (player1.lives > 0) {
@@ -505,17 +556,17 @@ function handlePlayerMovement() {
       if (keysP1["Enter"] || keysP1["NumpadEnter"]) { shoot(player1); keysP1["Enter"] = keysP1["NumpadEnter"] = false; }
     }
   } else {
+    // Multiplayer: Player1 (A/D, W) is controlled by keysP1 and drawn in cyan.
     if (player1.lives > 0) {
-      // Player1 (arrow keys) drawn in cyan now.
-      if (keysP1["ArrowLeft"]) { player1.x -= player1.speed; if (player1.x < 0) player1.x = 0; }
-      if (keysP1["ArrowRight"]) { player1.x += player1.speed; if (player1.x + player1.width > canvas.width) player1.x = canvas.width - player1.width; }
-      if (keysP1["Enter"] || keysP1["NumpadEnter"]) { shoot(player1); keysP1["Enter"] = keysP1["NumpadEnter"] = false; }
+      if (keysP1["KeyA"]) { player1.x -= player1.speed; if (player1.x < 0) player1.x = 0; }
+      if (keysP1["KeyD"]) { player1.x += player1.speed; if (player1.x + player1.width > canvas.width) player1.x = canvas.width - player1.width; }
+      if (keysP1["KeyW"]) { shoot(player1); keysP1["KeyW"] = false; }
     }
+    // Player2 (arrow keys, Enter) is controlled by keysP2 and drawn in white.
     if (player2.lives > 0) {
-      // Player2 (A/D) remains white.
-      if (keysP2["KeyA"]) { player2.x -= player2.speed; if (player2.x < 0) player2.x = 0; }
-      if (keysP2["KeyD"]) { player2.x += player2.speed; if (player2.x + player2.width > canvas.width) player2.x = canvas.width - player2.width; }
-      if (keysP2["Space"]) { shoot(player2); keysP2["Space"] = false; }
+      if (keysP2["ArrowLeft"]) { player2.x -= player2.speed; if (player2.x < 0) player2.x = 0; }
+      if (keysP2["ArrowRight"]) { player2.x += player2.speed; if (player2.x + player2.width > canvas.width) player2.x = canvas.width - player2.width; }
+      if (keysP2["Enter"] || keysP2["NumpadEnter"]) { shoot(player2); keysP2["Enter"] = keysP2["NumpadEnter"] = false; }
     }
   }
 }
@@ -526,26 +577,22 @@ function draw() {
   drawInvaders();
   updateBullets();
   drawBarriers();
-  // Draw player bullets
   ctx.fillStyle = 'yellow';
   bullets.forEach(bullet => { ctx.fillRect(bullet.x, bullet.y, 5, 10); });
-  // Draw enemy bullets
   ctx.fillStyle = 'red';
   invaderBullets.forEach(bullet => { ctx.fillRect(bullet.x, bullet.y, 5, 10); });
   
   if (gameMode === "singleplayer") {
     if (player1.lives > 0) {
-      // Singleplayer: draw player1 in cyan.
-      ctx.fillStyle = 'cyan';
+      ctx.fillStyle = 'white';
       ctx.fillRect(player1.x, player1.y, player1.width, player1.height);
       if (player1.shieldActive) {
-        ctx.strokeStyle = 'cyan';
+        ctx.strokeStyle = 'white';
         ctx.lineWidth = 3;
         ctx.strokeRect(player1.x - 5, player1.y - 5, player1.width + 10, player1.height + 10);
       }
     }
   } else {
-    // Multiplayer: player1 (arrow keys) drawn in cyan, player2 (A/D) drawn in white.
     if (player1.lives > 0) {
       ctx.fillStyle = 'cyan';
       ctx.fillRect(player1.x, player1.y, player1.width, player1.height);
@@ -559,7 +606,7 @@ function draw() {
       ctx.fillStyle = 'white';
       ctx.fillRect(player2.x, player2.y, player2.width, player2.height);
       if (player2.shieldActive) {
-        ctx.strokeStyle = 'blue';
+        ctx.strokeStyle = 'white';
         ctx.lineWidth = 3;
         ctx.strokeRect(player2.x - 5, player2.y - 5, player2.width + 10, player2.height + 10);
       }
@@ -583,10 +630,11 @@ function draw() {
 }
 function initGame() {
   if (gameMode === "singleplayer") {
-    player1 = { x: canvas.width/2 - 20, y: canvas.height - 50, width: 40, height: 20, speed: 5, lives: 3, shieldActive: false, shieldCooldown: false };
+    player1 = { x: canvas.width/2 - 20, y: canvas.height - 50, width: 40, height: 20, speed: 5, lives: 3, shieldActive: false, shieldCooldown: false, lastShotTime: 0 };
   } else {
-    player1 = { x: canvas.width/2 - 100, y: canvas.height - 50, width: 40, height: 20, speed: 5, lives: 3, shieldActive: false, shieldCooldown: false };
-    player2 = { x: canvas.width/2 + 60, y: canvas.height - 50, width: 40, height: 20, speed: 5, lives: 3, shieldActive: false, shieldCooldown: false };
+    // Multiplayer: Player1 (A/D, W) is our first player, Player2 (arrow keys, Enter) is second.
+    player1 = { x: canvas.width/2 - 100, y: canvas.height - 50, width: 40, height: 20, speed: 5, lives: 3, shieldActive: false, shieldCooldown: false, lastShotTime: 0 };
+    player2 = { x: canvas.width/2 + 60, y: canvas.height - 50, width: 40, height: 20, speed: 5, lives: 3, shieldActive: false, shieldCooldown: false, lastShotTime: 0 };
   }
   teamScore = 0;
   invaderLevel = 1;

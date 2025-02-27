@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <title>Space Invaders Coop</title>
-  <!-- Link to external CSS file -->
+  <!-- Link external CSS -->
   <link rel="stylesheet" href="style.css">
-  <!-- Using Orbitron font for a futuristic look -->
+  <!-- Orbitron font -->
   <link href="https://fonts.googleapis.com/css2?family=Orbitron&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -37,9 +37,13 @@
     <button id="fullscreenButton" onclick="toggleFullscreen()">Fullscreen (F)</button>
     <div id="shop">
       <h2>Shop</h2>
+      <!-- Normal powerups -->
       <div class="powerup" onclick="buyPowerup('speed')">Speed Boost (500 pts)</div>
       <div class="powerup" onclick="buyPowerup('shield')">Shield (250 pts)</div>
       <div class="powerup" onclick="buyPowerup('doubleShot')">Double Shot (1000 pts)</div>
+      <!-- New speedy powerups -->
+      <div class="powerup" onclick="buyPowerup('speedyDouble')">Speedy Double Shot (100 pts)</div>
+      <div class="powerup" onclick="buyPowerup('speedyTriple')">Speedy Triple Shot (300 pts)</div>
       <br>
       <button onclick="toggleShop()">Close</button>
     </div>
@@ -57,7 +61,6 @@
     </div>
   </div>
 
-  <!-- External JavaScript -->
   <script src="script.js"></script>
 </body>
 </html>
