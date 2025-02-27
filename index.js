@@ -3,29 +3,29 @@ const app = express();
 const http = require('http').createServer(app);
 const io = require('socket.io')(http);
 
-// Servir arquivos estáticos da pasta public
+// Serve static files from the public folder
 app.use(express.static(__dirname + '/public'));
 
 io.on('connection', (socket) => {
-  console.log('Usuário conectado: ' + socket.id);
+  console.log('User connected: ' + socket.id);
 
-  // Recebe movimento do jogador e repassa para os outros
+  // Receive player movement and broadcast to others
   socket.on('playerMove', (data) => {
     socket.broadcast.emit('updatePlayer', { id: socket.id, data });
   });
 
-  // Recebe o tiro do jogador e repassa para os outros
+  // Receive player shoot and broadcast to others
   socket.on('playerShoot', (data) => {
     socket.broadcast.emit('playerShoot', data);
   });
 
-  // Notifica quando um jogador desconecta
+  // Notify when a player disconnects
   socket.on('disconnect', () => {
-    console.log('Usuário desconectado: ' + socket.id);
+    console.log('User disconnected: ' + socket.id);
     socket.broadcast.emit('playerDisconnected', { id: socket.id });
   });
 });
 
 http.listen(3000, () => {
-  console.log('Servidor rodando na porta 3000');
+  console.log('Server running on port 3000');
 });

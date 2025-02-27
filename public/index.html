@@ -4,11 +4,17 @@
   <meta charset="UTF-8">
   <title>Space Invaders Coop</title>
   <style>
+    body {
+      background-color: #000;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      text-align: center;
+    }
     canvas {
-      border: 1px solid #000;
+      border: 1px solid #fff;
       background: #000;
       display: block;
-      margin: 0 auto;
+      margin: 20px auto;
     }
     #shop {
       text-align: center;
@@ -20,10 +26,17 @@
       padding: 10px;
       border: 1px solid #fff;
       cursor: pointer;
+      background-color: #333;
+      color: #fff;
+      transition: background-color 0.3s;
+    }
+    .powerup:hover {
+      background-color: #555;
     }
   </style>
 </head>
 <body>
+  <h1>Space Invaders Coop</h1>
   <canvas id="gameCanvas" width="800" height="600"></canvas>
   <div id="shop">
     <div class="powerup" onclick="buyPowerup('speed')">Speed Boost</div>
@@ -37,7 +50,7 @@
     const ctx = canvas.getContext('2d');
     const socket = io();
 
-    // Variáveis do jogador
+    // Player variables
     const player = {
       x: canvas.width / 2 - 20,
       y: canvas.height - 50,
@@ -51,7 +64,7 @@
       }
     };
 
-    // Função para comprar power-ups
+    // Function to buy power-ups
     function buyPowerup(type) {
       if (type === 'speed') {
         player.powerups.speed = true;
@@ -63,56 +76,73 @@
       }
     }
 
-    // Objetos para jogadores remotos
+    // Remote players
     let remotePlayers = {};
 
-    // Tiros disparados
+    // Bullets
     let bullets = [];
 
-    // Inimigos (invaders)
+    // Invaders
     let invaders = [];
-    for (let i = 0; i < 10; i++) {
-      for (let j = 0; j < 3; j++) {
-        invaders.push({
-          x: 50 + i * 60,
-          y: 50 + j * 40,
-          width: 40,
-          height: 20,
-          alive: true,
-          direction: 1
-        });
+    const invaderRows = 3;
+    const invaderCols = 10;
+    const invaderWidth = 40;
+    const invaderHeight = 20;
+    const invaderPadding = 10;
+    const invaderOffsetTop = 50;
+    const invaderOffsetLeft = 50;
+    let invaderDirection = 1;
+    let invaderSpeed = 2;
+
+    for (let i = 0; i < invaderCols; i++) {
+      invaders[i] = [];
+      for (let j = 0; j < invaderRows; j++) {
+        invaders[i][j] = {
+          x: i * (invaderWidth + invaderPadding) + invaderOffsetLeft,
+          y: j * (invaderHeight + invaderPadding) + invaderOffsetTop,
+          alive: true
+        };
       }
     }
 
-    // Eventos de teclado para movimento e tiro
+    // Keyboard events for movement and shooting
+    const keys = {};
     document.addEventListener('keydown', (e) => {
+      keys[e.key] = true;
+    });
+    document.addEventListener('keyup', (e) => {
+      keys[e.key] = false;
+    });
+
+    function handlePlayerMovement() {
       let moved = false;
-      if (e.key === 'ArrowLeft') {
+      if (keys['ArrowLeft']) {
         player.x -= player.speed;
         moved = true;
       }
-      if (e.key === 'ArrowRight') {
+      if (keys['ArrowRight']) {
         player.x += player.speed;
         moved = true;
       }
-      if (e.key === ' ') {
-        // Dispara um tiro
+      if (keys[' ']) {
+        // Shoot a bullet
         const bullet = {
           x: player.x + player.width / 2,
           y: player.y,
           speed: 7
         };
         bullets.push(bullet);
-        // Envia para os outros jogadores
+        // Send to other players
         socket.emit('playerShoot', { x: bullet.x, y: bullet.y });
+        keys[' '] = false; // Prevent continuous shooting
       }
       if (moved) {
-        // Envia nova posição para os outros
+        // Send new position to other players
         socket.emit('playerMove', { x: player.x, y: player.y });
       }
-    });
+    }
 
-    // Atualiza dados de jogadores remotos
+    // Update remote player data
     socket.on('updatePlayer', (data) => {
       remotePlayers[data.id] = data.data;
     });
@@ -121,7 +151,7 @@
       delete remotePlayers[data.id];
     });
 
-    // Recebe os tiros dos outros jogadores
+    // Receive bullets from other players
     socket.on('playerShoot', (data) => {
       bullets.push({
         x: data.x,
@@ -130,78 +160,99 @@
       });
     });
 
-    // Atualiza e desenha os invaders
+    // Draw invaders
     function drawInvaders() {
       ctx.fillStyle = 'green';
-      invaders.forEach(invader => {
-        if (invader.alive) {
-          ctx.fillRect(invader.x, invader.y, invader.width, invader.height);
+      for (let i = 0; i < invaderCols; i++) {
+        for (let j = 0; j < invaderRows; j++) {
+          if (invaders[i][j].alive) {
+            ctx.fillRect(invaders[i][j].x, invaders[i][j].y, invaderWidth, invaderHeight);
+          }
         }
-      });
+      }
     }
 
-    // Atualiza a posição dos invaders
+    // Update invader positions
     function updateInvaders() {
-      invaders.forEach(invader => {
-        invader.x += invader.direction * 2;
-        if (invader.x + invader.width > canvas.width || invader.x < 0) {
-          invader.direction *= -1;
-          invader.y += 20;
+      let edgeReached = false;
+      for (let i = 0; i < invaderCols; i++) {
+        for (let j = 0; j < invaderRows; j++) {
+          if (invaders[i][j].alive) {
+            invaders[i][j].x += invaderDirection * invaderSpeed;
+            if (invaders[i][j].x + invaderWidth > canvas.width || invaders[i][j].x < 0) {
+              edgeReached = true;
+            }
+          }
         }
-      });
+      }
+      if (edgeReached) {
+        invaderDirection *= -1;
+        for (let i = 0; i < invaderCols; i++) {
+          for (let j = 0; j < invaderRows; j++) {
+            invaders[i][j].y += invaderHeight;
+          }
+        }
+      }
     }
 
-    // Atualiza a posição dos tiros e checa colisões
+    // Update bullet positions and check collisions
     function updateBullets() {
       for (let i = bullets.length - 1; i >= 0; i--) {
         const bullet = bullets[i];
         bullet.y -= bullet.speed;
 
-        // Verifica colisão com cada invader
-        invaders.forEach(invader => {
-          if (invader.alive &&
-              bullet.x > invader.x &&
-              bullet.x < invader.x + invader.width &&
-              bullet.y > invader.y &&
-              bullet.y < invader.y + invader.height) {
-            invader.alive = false;
-            bullets.splice(i, 1);
+        // Check collision with each invader
+        for (let col = 0; col < invaderCols; col++) {
+          for (let row = 0; row < invaderRows; row++) {
+            const invader = invaders[col][row];
+            if (invader.alive &&
+                bullet.x > invader.x &&
+                bullet.x < invader.x + invaderWidth &&
+                bullet.y > invader.y &&
+                bullet.y < invader.y + invaderHeight) {
+              invader.alive = false;
+              bullets.splice(i, 1);
+              break;
+            }
           }
-        });
+        }
 
-        // Remove tiro se sair da tela
+        // Remove bullet if it goes off-screen
         if (bullet.y < 0) {
           bullets.splice(i, 1);
         }
       }
     }
 
-    // Função principal de desenho
+    // Main draw function
     function draw() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       
-      // Desenha invaders
+      // Handle player movement
+      handlePlayerMovement();
+      
+      // Draw invaders
       drawInvaders();
       
-      // Atualiza e desenha os tiros
+      // Update and draw bullets
       updateBullets();
       ctx.fillStyle = 'yellow';
       bullets.forEach(bullet => {
         ctx.fillRect(bullet.x, bullet.y, 5, 10);
       });
       
-      // Desenha o jogador local
+      // Draw local player
       ctx.fillStyle = 'white';
       ctx.fillRect(player.x, player.y, player.width, player.height);
       
-      // Desenha jogadores remotos
+      // Draw remote players
       for (let id in remotePlayers) {
         const rp = remotePlayers[id];
         ctx.fillStyle = 'red';
         ctx.fillRect(rp.x, rp.y, player.width, player.height);
       }
       
-      // Atualiza a posição dos invaders
+      // Update invader positions
       updateInvaders();
       
       requestAnimationFrame(draw);
