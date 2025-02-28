@@ -1,3 +1,4 @@
+// server.js
 const express = require('express');
 const app = express();
 const http = require('http');
@@ -5,10 +6,10 @@ const server = http.createServer(app);
 const socketIo = require('socket.io');
 const io = socketIo(server);
 
-// Serve static files from the public folder
+// Serve static files from the current directory
 app.use(express.static(__dirname));
 
-// Explicitly serve index.html on "/"
+// Explicitly serve index.html at root
 app.get('/', (req, res) => {
   res.sendFile(__dirname + '/index.html');
 });
@@ -18,9 +19,9 @@ let lobbies = {};
 let lobbyCounter = 1;
 
 // Lobby object structure:
-// { id: 'lobby1', host: socket.id, players: [ { id, name } ], private: boolean, password: string }
+// { id: 'lobby1', host: socket.id, players: [{ id, name }], private: boolean, password: string }
 io.on('connection', (socket) => {
-  console.log('New client connected:', socket.id);
+  console.log('Client connected:', socket.id);
 
   socket.on('createLobby', (data) => {
     // data: { name, private, password }

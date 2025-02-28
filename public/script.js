@@ -52,7 +52,7 @@ socket && socket.on("lobbyJoined", (data) => {
   }
 });
 
-// ----- Mode Selection & Navigation -----
+// ----- Mode Selection & Navigation (for offline/local modes) -----
 function selectMode(mode) {
   if (mode === "singleplayer") {
     gameMode = "singleplayer";
@@ -118,12 +118,12 @@ let speedyExpire = 0;
 const SHOT_COOLDOWN = 300;
 
 // Player objects
-// Multiplayer online/local:
+// In singleplayer, use A/D to move and SPACE to shoot.
+// In multiplayer online/local:
 //   - Player1 (controlled with A/D for movement and SPACE to shoot) is white.
 //   - Player2 (controlled with arrow keys for movement and ENTER to shoot) is cyan.
 let player1, player2;
 
-// Barriers – 3 barriers with 10 health each (not drawn in fullscreen)
 let barriers = [];
 function createBarriers() {
   if (document.fullscreenElement) {
@@ -236,10 +236,6 @@ function toggleFullscreen() {
 }
 
 // ----- Input Handling -----
-// For singleplayer: use arrow keys for movement and SPACE to shoot.
-// For multiplayer_local/online:
-//   - Player1 (controlled with A/D for movement and SPACE to shoot) is white.
-//   - Player2 (controlled with arrow keys for movement and ENTER to shoot) is cyan.
 const keysP1 = {};
 const keysP2 = {};
 document.addEventListener('keydown', (e) => {
@@ -247,15 +243,17 @@ document.addEventListener('keydown', (e) => {
   if (e.key.toLowerCase() === 's') toggleShop();
   
   if (gameMode === "singleplayer") {
-    if (e.code === "ArrowLeft" || e.code === "ArrowRight" || e.code === "Space") {
-      keysP1[e.code] = true;
-    }
-  } else if (gameMode === "multiplayer_local" || gameMode === "multiplayer_online") {
-    // Player1: keys A and D for movement, SPACE to shoot.
+    // In singleplayer, use A/D for movement and SPACE to shoot.
     if (e.code === "KeyA" || e.code === "KeyD" || e.code === "Space") {
       keysP1[e.code] = true;
     }
-    // Player2: arrow keys for movement, Enter (or NumpadEnter) to shoot.
+  } else if (gameMode === "multiplayer_local" || gameMode === "multiplayer_online") {
+    // For multiplayer:
+    // Player1: A/D for movement, SPACE to shoot (drawn in white)
+    if (e.code === "KeyA" || e.code === "KeyD" || e.code === "Space") {
+      keysP1[e.code] = true;
+    }
+    // Player2: ArrowLeft/ArrowRight for movement, Enter (or NumpadEnter) to shoot (drawn in cyan)
     if (e.code === "ArrowLeft" || e.code === "ArrowRight" || e.code === "Enter" || e.code === "NumpadEnter") {
       keysP2[e.code] = true;
     }
@@ -263,7 +261,7 @@ document.addEventListener('keydown', (e) => {
 });
 document.addEventListener('keyup', (e) => {
   if (gameMode === "singleplayer") {
-    if (e.code === "ArrowLeft" || e.code === "ArrowRight" || e.code === "Space") {
+    if (e.code === "KeyA" || e.code === "KeyD" || e.code === "Space") {
       keysP1[e.code] = false;
     }
   } else if (gameMode === "multiplayer_local" || gameMode === "multiplayer_online") {
@@ -578,23 +576,24 @@ function leaveGame() {
 }
 
 // ----- Player Movement & Drawing -----
-// Singleplayer: use arrow keys and SPACE to shoot.
-// Multiplayer_local/online:
-//   - Player1: controlled with A/D (movement) and SPACE to shoot (drawn in white).
-//   - Player2: controlled with arrow keys (movement) and ENTER to shoot (drawn in cyan).
+// Singleplayer: use arrow keys and SPACE to shoot (but here we want singleplayer to use A/D & SPACE).
+// So for singleplayer, we now use keys "KeyA" and "KeyD" for movement and "Space" for shooting.
 function handlePlayerMovement() {
   if (gameMode === "singleplayer") {
-    if (player1.lives > 0) {
-      if (keysP1["ArrowLeft"]) { player1.x -= player1.speed; if (player1.x < 0) player1.x = 0; }
-      if (keysP1["ArrowRight"]) { player1.x += player1.speed; if (player1.x + player1.width > canvas.width) player1.x = canvas.width - player1.width; }
-      if (keysP1["Space"]) { shoot(player1); keysP1["Space"] = false; }
-    }
-  } else {
     if (player1.lives > 0) {
       if (keysP1["KeyA"]) { player1.x -= player1.speed; if (player1.x < 0) player1.x = 0; }
       if (keysP1["KeyD"]) { player1.x += player1.speed; if (player1.x + player1.width > canvas.width) player1.x = canvas.width - player1.width; }
       if (keysP1["Space"]) { shoot(player1); keysP1["Space"] = false; }
     }
+  } else {
+    // Multiplayer:
+    // Player1 (A/D, SPACE) is white.
+    if (player1.lives > 0) {
+      if (keysP1["KeyA"]) { player1.x -= player1.speed; if (player1.x < 0) player1.x = 0; }
+      if (keysP1["KeyD"]) { player1.x += player1.speed; if (player1.x + player1.width > canvas.width) player1.x = canvas.width - player1.width; }
+      if (keysP1["Space"]) { shoot(player1); keysP1["Space"] = false; }
+    }
+    // Player2 (arrow keys, ENTER) is cyan.
     if (player2.lives > 0) {
       if (keysP2["ArrowLeft"]) { player2.x -= player2.speed; if (player2.x < 0) player2.x = 0; }
       if (keysP2["ArrowRight"]) { player2.x += player2.speed; if (player2.x + player2.width > canvas.width) player2.x = canvas.width - player2.width; }
@@ -662,9 +661,12 @@ function draw() {
 }
 function initGame() {
   if (gameMode === "singleplayer") {
+    // Singleplayer: move with A/D and shoot with SPACE.
     player1 = { x: canvas.width/2 - 20, y: canvas.height - 50, width: 40, height: 20, speed: 5, lives: 3, shieldActive: false, shieldCooldown: false, lastShotTime: 0 };
   } else {
-    // Multiplayer: Player1 (A/D, SPACE) is white; Player2 (arrow keys, ENTER) is cyan.
+    // Multiplayer online/local:
+    // Player1: controlled with A/D and SPACE to shoot (white).
+    // Player2: controlled with arrow keys and ENTER to shoot (cyan).
     player1 = { x: canvas.width/2 - 100, y: canvas.height - 50, width: 40, height: 20, speed: 5, lives: 3, shieldActive: false, shieldCooldown: false, lastShotTime: 0 };
     player2 = { x: canvas.width/2 + 60, y: canvas.height - 50, width: 40, height: 20, speed: 5, lives: 3, shieldActive: false, shieldCooldown: false, lastShotTime: 0 };
   }

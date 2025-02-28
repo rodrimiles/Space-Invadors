@@ -8,32 +8,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Orbitron&display=swap" rel="stylesheet">
 </head>
 <body>
-  <!-- Main Menu -->
-  <div id="mainMenu">
-    <h1>Space Invaders Coop</h1>
-    <button onclick="selectMode('singleplayer')">Singleplayer</button>
-    <button onclick="selectMode('multiplayer')">Multiplayer</button>
-    <button onclick="showHowToPlay()">How to Play</button>
-  </div>
-
-  <!-- How to Play -->
-  <div id="howToPlay" style="display:none;">
-    <h2>How to Play</h2>
-    <p>Use the following controls to play the game:</p>
-    <ul>
-      <li>Singleplayer: A/D to move, SPACE to shoot</li>
-      <li>Multiplayer:
-        <ul>
-          <li>Player 1: A/D to move, SPACE to shoot (White)</li>
-          <li>Player 2: J/L to move, - to shoot (Cyan)</li>
-        </ul>
-      </li>
-    </ul>
-    <button onclick="backToMainMenu()">Back</button>
-  </div>
-
   <!-- Lobby Screen for Online Multiplayer -->
-  <div id="lobbyScreen" style="display:none;">
+  <div id="lobbyScreen">
     <h1>Space Invaders Coop - Online Lobby</h1>
     <div id="createLobby">
       <h2>Create Lobby</h2>
@@ -58,7 +34,7 @@
     </div>
   </div>
 
-  <!-- Offline / Local Multiplayer Screens -->
+  <!-- Offline/Local Screens -->
   <div id="landing" style="display:none;">
     <h1>Space Invaders Coop</h1>
     <button onclick="selectMode('singleplayer')">Singleplayer</button>
@@ -106,7 +82,6 @@
     </div>
   </div>
 
-  <!-- Include Socket.IO -->
   <script src="/socket.io/socket.io.js"></script>
   <script src="script.js"></script>
 </body>

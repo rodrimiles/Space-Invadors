@@ -114,7 +114,7 @@ canvas {
   z-index: 100;
 }
 
-/* Fullscreen Adjustments */
+/* Fullscreen adjustments: show HUD in top-left */
 :fullscreen #info {
   position: fixed;
   top: 10px;
