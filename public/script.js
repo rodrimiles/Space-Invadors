@@ -207,9 +207,9 @@ function createBarriers() {
 let boss = null;
 function updateInfoDisplay() {
   if (gameMode === "singleplayer") {
-    document.getElementById('lives').innerText = `Lives: ${player1.lives}`;
+    document.getElementById('lives').innerText = `Lives: ${Math.max(player1.lives, 0)}`;
   } else {
-    document.getElementById('lives').innerText = `P1 Lives: ${player1.lives} | P2 Lives: ${player2.lives}`;
+    document.getElementById('lives').innerText = `P1 Lives: ${Math.max(player1.lives, 0)} | P2 Lives: ${Math.max(player2.lives, 0)}`;
   }
   document.getElementById('score').innerText = `Score: ${teamScore}`;
   document.getElementById('level').innerText = `Level: ${invaderLevel}`;
@@ -444,27 +444,22 @@ function drawInvader(invader) {
 }
 
 function drawBoss(boss) {
-  try {
-    let gradient = ctx.createRadialGradient(
-      boss.x + boss.width/2, boss.y + boss.height/2, 10,
-      boss.x + boss.width/2, boss.y + boss.height/2, boss.width/2
-    );
-    gradient.addColorStop(0, '#FF0000');
-    gradient.addColorStop(1, '#660000');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(boss.x, boss.y, boss.width, boss.height);
-    ctx.strokeStyle = '#FFFFFF';
-    ctx.lineWidth = 3;
-    ctx.strokeRect(boss.x, boss.y, boss.width, boss.height);
-    ctx.fillStyle = '#FFF';
-    ctx.fillRect(boss.x, boss.y - 10, boss.width, 5);
-    ctx.fillStyle = '#0F0';
-    let maxHealth = 20 + (invaderLevel - 5) * 5;
-    ctx.fillRect(boss.x, boss.y - 10, boss.width * (boss.health / maxHealth), 5);
-  } catch (err) {
-    console.error("Error drawing boss:", err);
-    boss = null;
-  }
+  let gradient = ctx.createRadialGradient(
+    boss.x + boss.width / 2, boss.y + boss.height / 2, 10,
+    boss.x + boss.width / 2, boss.y + boss.height / 2, boss.width / 2
+  );
+  gradient.addColorStop(0, '#FF0000');
+  gradient.addColorStop(1, '#660000');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(boss.x, boss.y, boss.width, boss.height);
+  ctx.strokeStyle = '#FFFFFF';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(boss.x, boss.y, boss.width, boss.height);
+  ctx.fillStyle = '#FFF';
+  ctx.fillRect(boss.x, boss.y - 10, boss.width, 5);
+  ctx.fillStyle = '#0F0';
+  let maxHealth = 20 + (invaderLevel - 5) * 5;
+  ctx.fillRect(boss.x, boss.y - 10, boss.width * (boss.health / maxHealth), 5);
 }
 
 function drawInvaders() {
@@ -538,23 +533,21 @@ function updateBullets() {
     speedyDoubleActive = false;
     speedyTripleActive = false;
   }
-  
+
   for (let i = bullets.length - 1; i >= 0; i--) {
     const bullet = bullets[i];
     bullet.y -= bullet.speed;
-    if (checkBarrierCollision(bullet)) { bullets.splice(i,1); continue; }
+    if (checkBarrierCollision(bullet)) { bullets.splice(i, 1); continue; }
     if (boss && boss.alive &&
         bullet.x > boss.x && bullet.x < boss.x + boss.width &&
         bullet.y > boss.y && bullet.y < boss.y + boss.height) {
-      // Decrement boss health and clamp it
-      boss.health = Math.max(boss.health - 1, 0);
-      if (boss.health === 0) {
+      boss.health -= 1;
+      if (boss.health <= 0) {
         boss.alive = false;
         teamScore += 100;
         updateInfoDisplay();
-        boss = null;
       }
-      bullets.splice(i,1);
+      bullets.splice(i, 1);
       continue;
     }
     for (let col = 0; col < invaderCols; col++) {
@@ -569,36 +562,37 @@ function updateBullets() {
             teamScore += 5;
             updateInfoDisplay();
           }
-          bullets.splice(i,1);
+          bullets.splice(i, 1);
           break;
         }
       }
     }
     if (bullet.y < 0) { bullets.splice(i, 1); }
   }
+
   for (let i = invaderBullets.length - 1; i >= 0; i--) {
     const bullet = invaderBullets[i];
     bullet.y += bullet.speed;
-    if (checkBarrierCollision(bullet)) { invaderBullets.splice(i,1); continue; }
+    if (checkBarrierCollision(bullet)) { invaderBullets.splice(i, 1); continue; }
     if (gameMode === "singleplayer") {
       if (bullet.x > player1.x && bullet.x < player1.x + player1.width &&
           bullet.y > player1.y && bullet.y < player1.y + player1.height) {
-        invaderBullets.splice(i,1);
-        if (!player1.shieldActive) { player1.lives--; updateInfoDisplay(); }
+        invaderBullets.splice(i, 1);
+        if (!player1.shieldActive) { player1.lives = Math.max(player1.lives - 1, 0); updateInfoDisplay(); }
       }
     } else {
       if (bullet.x > player1.x && bullet.x < player1.x + player1.width &&
           bullet.y > player1.y && bullet.y < player1.y + player1.height) {
-        invaderBullets.splice(i,1);
-        if (!player1.shieldActive) { player1.lives--; updateInfoDisplay(); }
+        invaderBullets.splice(i, 1);
+        if (!player1.shieldActive) { player1.lives = Math.max(player1.lives - 1, 0); updateInfoDisplay(); }
       }
       if (bullet.x > player2.x && bullet.x < player2.x + player2.width &&
           bullet.y > player2.y && bullet.y < player2.y + player2.height) {
-        invaderBullets.splice(i,1);
-        if (!player2.shieldActive) { player2.lives--; updateInfoDisplay(); }
+        invaderBullets.splice(i, 1);
+        if (!player2.shieldActive) { player2.lives = Math.max(player2.lives - 1, 0); updateInfoDisplay(); }
       }
     }
-    if (bullet.y > canvas.height) { invaderBullets.splice(i,1); }
+    if (bullet.y > canvas.height) { invaderBullets.splice(i, 1); }
   }
 }
 
@@ -677,6 +671,7 @@ function leaveGame() {
   window.location.href = "about:blank";
 }
 
+// Ensure the player's lives do not go below 0
 function handlePlayerMovement() {
   if (gameMode === "singleplayer") {
     if (player1.lives > 0) {
@@ -698,6 +693,7 @@ function handlePlayerMovement() {
   }
 }
 
+// Main draw function
 function draw() {
   if (gamePaused) return;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -709,7 +705,7 @@ function draw() {
   bullets.forEach(bullet => { ctx.fillRect(bullet.x, bullet.y, 5, 10); });
   ctx.fillStyle = 'red';
   invaderBullets.forEach(bullet => { ctx.fillRect(bullet.x, bullet.y, 5, 10); });
-  
+
   if (gameMode === "singleplayer") {
     if (player1.lives > 0) {
       ctx.fillStyle = 'white';
