@@ -9,8 +9,8 @@ if (typeof io !== 'undefined') {
   socket = io();
 }
 
-// ----- Lobby UI for Online Multiplayer -----
-// Update lobby list
+// ----- Lobby & Leaderboard UI -----
+// Update lobby list on every change
 socket && socket.on("lobbyList", (lobbies) => {
   const lobbyList = document.getElementById("lobbyList");
   lobbyList.innerHTML = "";
@@ -19,6 +19,17 @@ socket && socket.on("lobbyList", (lobbies) => {
     li.innerText = `${lobby.lobbyName} (${lobby.id}) - (${lobby.players.length}/2)`;
     li.onclick = () => { document.getElementById("lobbySelect").value = lobby.id; };
     lobbyList.appendChild(li);
+  });
+});
+
+// Update leaderboard in the landing menu
+socket && socket.on("leaderboardUpdate", (leaderboard) => {
+  const lbList = document.getElementById("leaderboardList");
+  lbList.innerHTML = "";
+  leaderboard.forEach(entry => {
+    const li = document.createElement("li");
+    li.innerText = `${entry.username}: ${entry.score}`;
+    lbList.appendChild(li);
   });
 });
 
@@ -148,9 +159,7 @@ function backToLandingLobby() {
 }
 
 function startGame() {
-  if (document.getElementById("lobbyScreen")) {
-    document.getElementById("lobbyScreen").style.display = "none";
-  }
+  document.getElementById("lobbyScreen").style.display = "none";
   document.getElementById("multiplayerOptions").style.display = "none";
   document.getElementById("waitingScreen").style.display = "none";
   document.getElementById("landingScreen").style.display = "none";
@@ -160,8 +169,6 @@ function startGame() {
 }
 
 // ----- Game Variables & Setup -----
-// (The rest of your game code remains unchanged below this point)
-
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 let animationFrameId;
@@ -189,15 +196,12 @@ let player1, player2;
 
 let barriers = [];
 function createBarriers() {
-  if (document.fullscreenElement) {
-    barriers = [];
-  } else {
-    barriers = [
-      { x: 150, y: canvas.height - 150, width: 80, height: 40, health: 10 },
-      { x: 360, y: canvas.height - 150, width: 80, height: 40, health: 10 },
-      { x: 570, y: canvas.height - 150, width: 80, height: 40, health: 10 }
-    ];
-  }
+  // Always draw barriers (even in fullscreen)
+  barriers = [
+    { x: 150, y: canvas.height - 150, width: 80, height: 40, health: 10 },
+    { x: 360, y: canvas.height - 150, width: 80, height: 40, health: 10 },
+    { x: 570, y: canvas.height - 150, width: 80, height: 40, health: 10 }
+  ];
 }
 
 let boss = null;
@@ -212,8 +216,6 @@ function updateInfoDisplay() {
 }
 
 // ----- Shop Powerup Purchase -----
-// (Remaining game code continues as before...)
-
 function buyPowerup(type) {
   if (type === 'speed') {
     if (teamScore >= 500 && normalSpeedBoost === 0) {
@@ -440,6 +442,7 @@ function drawInvader(invader) {
     ctx.strokeRect(invader.x, invader.y, invaderWidth, invaderHeight);
   }
 }
+
 function drawBoss(boss) {
   try {
     let gradient = ctx.createRadialGradient(
@@ -463,6 +466,7 @@ function drawBoss(boss) {
     boss = null;
   }
 }
+
 function drawInvaders() {
   if (boss) {
     if (!boss.alive) { boss = null; }
@@ -477,8 +481,9 @@ function drawInvaders() {
     }
   }
 }
+
 function drawBarriers() {
-  if (document.fullscreenElement) return;
+  // Always draw barriers (even in fullscreen)
   barriers.forEach(barrier => {
     if (barrier.health >= 8) ctx.fillStyle = '#0f0';
     else if (barrier.health >= 5) ctx.fillStyle = '#ff0';
@@ -527,6 +532,7 @@ function updateInvaders() {
     }
   }
 }
+
 function updateBullets() {
   if ((speedyDoubleActive || speedyTripleActive) && Date.now() > speedyExpire) {
     speedyDoubleActive = false;
@@ -536,12 +542,13 @@ function updateBullets() {
   for (let i = bullets.length - 1; i >= 0; i--) {
     const bullet = bullets[i];
     bullet.y -= bullet.speed;
-    if (!document.fullscreenElement && checkBarrierCollision(bullet)) { bullets.splice(i,1); continue; }
+    if (checkBarrierCollision(bullet)) { bullets.splice(i,1); continue; }
     if (boss && boss.alive &&
         bullet.x > boss.x && bullet.x < boss.x + boss.width &&
         bullet.y > boss.y && bullet.y < boss.y + boss.height) {
-      boss.health -= 1;
-      if (boss.health <= 0) {
+      // Decrement boss health and clamp it
+      boss.health = Math.max(boss.health - 1, 0);
+      if (boss.health === 0) {
         boss.alive = false;
         teamScore += 100;
         updateInfoDisplay();
@@ -572,7 +579,7 @@ function updateBullets() {
   for (let i = invaderBullets.length - 1; i >= 0; i--) {
     const bullet = invaderBullets[i];
     bullet.y += bullet.speed;
-    if (!document.fullscreenElement && checkBarrierCollision(bullet)) { invaderBullets.splice(i,1); continue; }
+    if (checkBarrierCollision(bullet)) { invaderBullets.splice(i,1); continue; }
     if (gameMode === "singleplayer") {
       if (bullet.x > player1.x && bullet.x < player1.x + player1.width &&
           bullet.y > player1.y && bullet.y < player1.y + player1.height) {
@@ -594,8 +601,8 @@ function updateBullets() {
     if (bullet.y > canvas.height) { invaderBullets.splice(i,1); }
   }
 }
+
 function checkBarrierCollision(bullet) {
-  if (document.fullscreenElement) return false;
   for (let i = barriers.length - 1; i >= 0; i--) {
     let barrier = barriers[i];
     if (bullet.x > barrier.x && bullet.x < barrier.x + barrier.width &&
@@ -607,6 +614,7 @@ function checkBarrierCollision(bullet) {
   }
   return false;
 }
+
 function checkAllEnemiesDefeated() {
   if (boss) return !boss.alive;
   for (let i = 0; i < invaderCols; i++) {
@@ -629,11 +637,18 @@ function nextLevel() {
   createInvaders();
   updateInfoDisplay();
 }
+
 function gameOver() {
   document.getElementById('gameOverPopup').style.display = 'block';
   document.getElementById('finalScore').innerText = `Your Score: ${teamScore}`;
   cancelAnimationFrame(animationFrameId);
+  // For online games, send the score so it appears in the leaderboard
+  if (gameMode === "multiplayer_online") {
+    let username = player1.name || "Anonymous";
+    socket.emit("gameFinished", { username, score: teamScore });
+  }
 }
+
 function playAgain() {
   document.getElementById('gameOverPopup').style.display = 'none';
   if (gameMode === "singleplayer") {
@@ -657,6 +672,7 @@ function playAgain() {
   updateInfoDisplay();
   draw();
 }
+
 function leaveGame() {
   window.location.href = "about:blank";
 }
@@ -681,13 +697,14 @@ function handlePlayerMovement() {
     }
   }
 }
+
 function draw() {
   if (gamePaused) return;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   handlePlayerMovement();
   drawInvaders();
   updateBullets();
-  if (!document.fullscreenElement) { drawBarriers(); }
+  drawBarriers();
   ctx.fillStyle = 'yellow';
   bullets.forEach(bullet => { ctx.fillRect(bullet.x, bullet.y, 5, 10); });
   ctx.fillStyle = 'red';
@@ -739,12 +756,13 @@ function draw() {
   
   animationFrameId = requestAnimationFrame(draw);
 }
+
 function initGame() {
   if (gameMode === "singleplayer") {
-    player1 = { x: canvas.width/2 - 20, y: canvas.height - 50, width: 40, height: 20, speed: 5, lives: 3, shieldActive: false, shieldCooldown: false, lastShotTime: 0 };
+    player1 = { x: canvas.width/2 - 20, y: canvas.height - 50, width: 40, height: 20, speed: 5, lives: 3, shieldActive: false, shieldCooldown: false, lastShotTime: 0, name: document.getElementById("createName").value || "Player1" };
   } else {
-    player1 = { x: canvas.width/2 - 100, y: canvas.height - 50, width: 40, height: 20, speed: 5, lives: 3, shieldActive: false, shieldCooldown: false, lastShotTime: 0 };
-    player2 = { x: canvas.width/2 + 60, y: canvas.height - 50, width: 40, height: 20, speed: 5, lives: 3, shieldActive: false, shieldCooldown: false, lastShotTime: 0 };
+    player1 = { x: canvas.width/2 - 100, y: canvas.height - 50, width: 40, height: 20, speed: 5, lives: 3, shieldActive: false, shieldCooldown: false, lastShotTime: 0, name: document.getElementById("createName").value || "Player1" };
+    player2 = { x: canvas.width/2 + 60, y: canvas.height - 50, width: 40, height: 20, speed: 5, lives: 3, shieldActive: false, shieldCooldown: false, lastShotTime: 0, name: document.getElementById("joinName").value || "Player2" };
   }
   teamScore = 0;
   invaderLevel = 1;

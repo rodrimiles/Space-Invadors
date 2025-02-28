@@ -14,21 +14,34 @@
     <button onclick="selectMode('singleplayer')">Singleplayer</button>
     <button onclick="selectMode('multiplayer')">Multiplayer</button>
     <button onclick="showGuide()">How to Play</button>
+    <!-- Leaderboard displayed on the landing screen -->
+    <div id="leaderboardMenu">
+      <h2>Leaderboard</h2>
+      <ol id="leaderboardList"></ol>
+    </div>
   </div>
 
-  <!-- Guide Screen -->
+  <!-- Guide Screen (Original version) -->
   <div id="guideScreen" style="display:none;">
     <h1>How to Play</h1>
-    <p><strong>Singleplayer:</strong> Use A and D keys to move and press SPACE to shoot.</p>
+    <p>
+      <strong>Singleplayer:</strong> Use A and D keys to move and press SPACE to shoot.
+    </p>
     <p>
       <strong>Multiplayer:</strong> You have two options:
-      <br>• <em>Online:</em> Create or join a lobby (max 2 players).
+      <br>• <em>Online:</em> Create or join a lobby (max 2 players). When two players are in a lobby, the game starts.
       <br>• <em>Local:</em> The game starts immediately.
     </p>
     <p>
       In multiplayer:
-      <br>• Player 1 (A/D, SPACE) is white.
-      <br>• Player 2 (Arrow keys, ENTER) is cyan.
+      <br>• Player 1 (controlled with A/D and SPACE) is displayed in white.
+      <br>• Player 2 (controlled with arrow keys and ENTER) is displayed in cyan.
+    </p>
+    <p>
+      <strong>Boss:</strong> When the boss appears, shoot it. Its health decreases with each hit; when it reaches 0, it is removed and you earn 100 points.
+    </p>
+    <p>
+      <strong>Powerups:</strong> In the shop, you can buy normal powerups (Speed Boost, Shield, Double Shot) and "speedy" powerups (which remove shot cooldown for 5 seconds and fire extra bullets).
     </p>
     <button onclick="backToLanding()">Back</button>
   </div>
