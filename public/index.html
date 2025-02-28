@@ -3,35 +3,56 @@
 <head>
   <meta charset="UTF-8">
   <title>Space Invaders Coop</title>
-  <!-- Link external CSS -->
   <link rel="stylesheet" href="style.css">
-  <!-- Orbitron font -->
+  <!-- Orbitron font for a futuristic look -->
   <link href="https://fonts.googleapis.com/css2?family=Orbitron&display=swap" rel="stylesheet">
 </head>
 <body>
-  <!-- Landing Screen -->
-  <div id="landing">
+  <!-- Lobby Screen for Online Multiplayer -->
+  <div id="lobbyScreen">
+    <h1>Space Invaders Coop - Online Lobby</h1>
+    <div id="createLobby">
+      <h2>Create Lobby</h2>
+      <input type="text" id="createName" placeholder="Your name">
+      <select id="lobbyType">
+        <option value="public">Public</option>
+        <option value="private">Private</option>
+      </select>
+      <input type="text" id="lobbyPassword" placeholder="Password (if private)">
+      <button onclick="createLobby()">Create</button>
+    </div>
+    <div id="joinLobby">
+      <h2>Join Lobby</h2>
+      <input type="text" id="joinName" placeholder="Your name">
+      <select id="lobbySelect"></select>
+      <input type="text" id="joinPassword" placeholder="Password (if required)">
+      <button onclick="joinLobby()">Join</button>
+    </div>
+    <div id="lobbyListDiv">
+      <h2>Available Lobbies (Public)</h2>
+      <ul id="lobbyList"></ul>
+    </div>
+  </div>
+
+  <!-- Offline / Local Multiplayer Screens -->
+  <div id="landing" style="display:none;">
     <h1>Space Invaders Coop</h1>
     <button onclick="selectMode('singleplayer')">Singleplayer</button>
     <button onclick="selectMode('multiplayer')">Multiplayer</button>
   </div>
-
-  <!-- Multiplayer Options Screen -->
-  <div id="multiplayerOptions" style="display: none;">
+  <div id="multiplayerOptions" style="display:none;">
     <h2>Multiplayer Options</h2>
     <button onclick="selectMultiplayer('online')">Online</button>
     <button onclick="selectMultiplayer('local')">Local Multiplayer</button>
     <button onclick="backToLanding()">Back</button>
   </div>
-
-  <!-- Waiting Screen for Online Multiplayer -->
-  <div id="waitingScreen" style="display: none;">
+  <div id="waitingScreen" style="display:none;">
     <h2>Waiting for other player...</h2>
     <button onclick="cancelWaiting()">Cancel</button>
   </div>
 
   <!-- Game Container -->
-  <div id="gameContainer" style="display: none;">
+  <div id="gameContainer" style="display:none;">
     <canvas id="gameCanvas" width="800" height="600"></canvas>
     <button id="shopButton" onclick="toggleShop()">Shop (S)</button>
     <button id="fullscreenButton" onclick="toggleFullscreen()">Fullscreen (F)</button>
@@ -61,6 +82,8 @@
     </div>
   </div>
 
+  <!-- Include Socket.IO -->
+  <script src="/socket.io/socket.io.js"></script>
   <script src="script.js"></script>
 </body>
 </html>

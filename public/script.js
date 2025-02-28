@@ -1,20 +1,75 @@
+// ----- Socket.IO Setup for Online Multiplayer -----
+let socket = null;
+if (typeof io !== 'undefined') {
+  socket = io(); // auto-connect if available
+}
+
+// ----- Lobby UI for Online Multiplayer -----
+const lobbyScreen = document.getElementById("lobbyScreen");
+if (socket) {
+  lobbyScreen.style.display = "block";
+}
+
+socket && socket.on("lobbyList", (lobbies) => {
+  const lobbyList = document.getElementById("lobbyList");
+  lobbyList.innerHTML = "";
+  lobbies.forEach(lobby => {
+    const li = document.createElement("li");
+    li.innerText = `${lobby.id} (${lobby.players.length}/2)`;
+    li.onclick = () => {
+      document.getElementById("lobbySelect").value = lobby.id;
+    };
+    lobbyList.appendChild(li);
+  });
+});
+
+function createLobby() {
+  const name = document.getElementById("createName").value;
+  const type = document.getElementById("lobbyType").value;
+  const password = document.getElementById("lobbyPassword").value;
+  if (!name) { alert("Enter your name."); return; }
+  socket.emit("createLobby", { name, private: type === "private", password });
+}
+socket && socket.on("lobbyCreated", (data) => {
+  lobbyScreen.style.display = "none";
+  startGame();
+});
+
+function joinLobby() {
+  const name = document.getElementById("joinName").value;
+  const lobbyId = document.getElementById("lobbySelect").value;
+  const password = document.getElementById("joinPassword").value;
+  if (!name) { alert("Enter your name."); return; }
+  socket.emit("joinLobby", { lobbyId, name, password });
+}
+socket && socket.on("joinError", (data) => {
+  alert(data.message);
+});
+socket && socket.on("lobbyJoined", (data) => {
+  if (data.lobby.players.length === 2) {
+    lobbyScreen.style.display = "none";
+    startGame();
+  }
+});
+
 // ----- Mode Selection & Navigation -----
-let gameMode = ""; // "singleplayer", "multiplayer_online", or "multiplayer_local"
 function selectMode(mode) {
   if (mode === "singleplayer") {
     gameMode = "singleplayer";
     startGame();
   } else if (mode === "multiplayer") {
-    document.getElementById("landing").style.display = "none";
-    document.getElementById("multiplayerOptions").style.display = "block";
+    if (socket) {
+      lobbyScreen.style.display = "block";
+    } else {
+      document.getElementById("landing").style.display = "none";
+      document.getElementById("multiplayerOptions").style.display = "block";
+    }
   }
 }
 function selectMultiplayer(option) {
   if (option === "online") {
     gameMode = "multiplayer_online";
-    document.getElementById("multiplayerOptions").style.display = "none";
-    document.getElementById("waitingScreen").style.display = "block";
-    // Online functionality not implemented.
+    // Lobby screen handles online mode.
   } else if (option === "local") {
     gameMode = "multiplayer_local";
     startGame();
@@ -30,6 +85,7 @@ function backToLanding() {
   document.getElementById("landing").style.display = "block";
 }
 function startGame() {
+  if (lobbyScreen) lobbyScreen.style.display = "none";
   document.getElementById("landing").style.display = "none";
   document.getElementById("multiplayerOptions").style.display = "none";
   document.getElementById("waitingScreen").style.display = "none";
@@ -43,51 +99,50 @@ const ctx = canvas.getContext('2d');
 let animationFrameId;
 let gamePaused = false;
 
-// Level/difficulty variables
 let invaderLevel = 1;
 let invaderSpeed = 2;
-let invaderDirection = 1;  // for regular invaders
-let bossDirection = 1;     // for boss oscillation
+let invaderDirection = 1;
+let bossDirection = 1;
 let teamScore = 0;
-let verticalDirection = 1; // for vertical oscillation of bots
+let verticalDirection = 1;
 let verticalMoveCount = 0;
 let nextLevelScheduled = false;
 
-// Powerup variables
-let normalSpeedBoost = 0;   // lasts for 1 shot round
-let normalDoubleShot = 0;   // lasts for 2 shot rounds
-let shieldActive = false;   // normal shield flag
-// New speedy powerups: no cooldown and extra bullets for 5 seconds.
+let normalSpeedBoost = 0;
+let normalDoubleShot = 0;
+let shieldActive = false;
 let speedyDoubleActive = false;
 let speedyTripleActive = false;
-let speedyExpire = 0; // timestamp when speedy powerup expires
+let speedyExpire = 0;
 
-// Default shot cooldown (300ms) applies only if no speedy powerup is active.
 const SHOT_COOLDOWN = 300;
 
 // Player objects
-// In multiplayer, we want: Player1 (controlled with A/D and W to shoot) drawn in cyan, and Player2 (using arrow keys and Enter to shoot) drawn in white.
+// Multiplayer online/local:
+//   - Player1 (controlled with A/D for movement and SPACE to shoot) is white.
+//   - Player2 (controlled with arrow keys for movement and ENTER to shoot) is cyan.
 let player1, player2;
 
-// Barriers – 3 barriers with 10 health each
+// Barriers – 3 barriers with 10 health each (not drawn in fullscreen)
 let barriers = [];
 function createBarriers() {
-  barriers = [
-    { x: 150, y: canvas.height - 150, width: 80, height: 40, health: 10 },
-    { x: 360, y: canvas.height - 150, width: 80, height: 40, health: 10 },
-    { x: 570, y: canvas.height - 150, width: 80, height: 40, health: 10 }
-  ];
+  if (document.fullscreenElement) {
+    barriers = [];
+  } else {
+    barriers = [
+      { x: 150, y: canvas.height - 150, width: 80, height: 40, health: 10 },
+      { x: 360, y: canvas.height - 150, width: 80, height: 40, health: 10 },
+      { x: 570, y: canvas.height - 150, width: 80, height: 40, health: 10 }
+    ];
+  }
 }
 
-// Boss object
 let boss = null;
 
-// Update info display
 function updateInfoDisplay() {
   if (gameMode === "singleplayer") {
     document.getElementById('lives').innerText = `Lives: ${player1.lives}`;
   } else {
-    // In multiplayer: Player1 (A/D, shoot with W) drawn in cyan, Player2 (arrow keys, shoot with Enter) drawn in white.
     document.getElementById('lives').innerText = `P1 Lives: ${player1.lives} | P2 Lives: ${player2.lives}`;
   }
   document.getElementById('score').innerText = `Score: ${teamScore}`;
@@ -99,52 +154,41 @@ function buyPowerup(type) {
   if (type === 'speed') {
     if (teamScore >= 500 && normalSpeedBoost === 0) {
       teamScore -= 500;
-      normalSpeedBoost = 1; // lasts for 1 shot round
+      normalSpeedBoost = 1;
       player1.speed = 10;
       if (player2) player2.speed = 10;
       updateInfoDisplay();
-    } else {
-      alert("Not enough points for Speed Boost or already active!");
-    }
+    } else { alert("Not enough points for Speed Boost or already active!"); }
   } else if (type === 'shield') {
     if (teamScore >= 250 && !shieldActive) {
       teamScore -= 250;
       activateShield();
       updateInfoDisplay();
-    } else {
-      alert("Not enough points for Shield or already active!");
-    }
+    } else { alert("Not enough points for Shield or already active!"); }
   } else if (type === 'doubleShot') {
     if (teamScore >= 1000 && normalDoubleShot === 0) {
       teamScore -= 1000;
-      normalDoubleShot = 2; // lasts for 2 shot rounds
+      normalDoubleShot = 2;
       updateInfoDisplay();
-    } else {
-      alert("Not enough points for Double Shot or already active!");
-    }
+    } else { alert("Not enough points for Double Shot or already active!"); }
   } else if (type === 'speedyDouble') {
     if (teamScore >= 100 && !speedyDoubleActive && !speedyTripleActive) {
       teamScore -= 100;
       speedyDoubleActive = true;
-      speedyExpire = Date.now() + 5000; // 5 seconds duration
+      speedyExpire = Date.now() + 5000;
       updateInfoDisplay();
-    } else {
-      alert("Not enough points for Speedy Double Shot or one already active!");
-    }
+    } else { alert("Not enough points for Speedy Double Shot or one already active!"); }
   } else if (type === 'speedyTriple') {
     if (teamScore >= 300 && !speedyDoubleActive && !speedyTripleActive) {
       teamScore -= 300;
       speedyTripleActive = true;
-      speedyExpire = Date.now() + 5000; // 5 seconds duration
+      speedyExpire = Date.now() + 5000;
       updateInfoDisplay();
-    } else {
-      alert("Not enough points for Speedy Triple Shot or one already active!");
-    }
+    } else { alert("Not enough points for Speedy Triple Shot or one already active!"); }
   }
 }
 
 // ----- Activate Shield -----
-// Shield lasts 10 seconds; 30-second cooldown.
 function activateShield() {
   shieldActive = true;
   if (player1) { player1.shieldActive = true; player1.shieldCooldown = true; }
@@ -192,10 +236,10 @@ function toggleFullscreen() {
 }
 
 // ----- Input Handling -----
-// In singleplayer, use Arrow keys and Enter (or NumpadEnter) for shooting.
-// In multiplayer_local:
-//   - Player1 (controlled with A/D for movement and W to shoot)  
-//   - Player2 (controlled with Arrow keys for movement and Enter to shoot)
+// For singleplayer: use arrow keys for movement and SPACE to shoot.
+// For multiplayer_local/online:
+//   - Player1 (controlled with A/D for movement and SPACE to shoot) is white.
+//   - Player2 (controlled with arrow keys for movement and ENTER to shoot) is cyan.
 const keysP1 = {};
 const keysP2 = {};
 document.addEventListener('keydown', (e) => {
@@ -203,34 +247,30 @@ document.addEventListener('keydown', (e) => {
   if (e.key.toLowerCase() === 's') toggleShop();
   
   if (gameMode === "singleplayer") {
-    if (e.code === "ArrowLeft" || e.code === "ArrowRight" ||
-        e.code === "Enter" || e.code === "NumpadEnter") {
+    if (e.code === "ArrowLeft" || e.code === "ArrowRight" || e.code === "Space") {
       keysP1[e.code] = true;
     }
-  } else if (gameMode === "multiplayer_local") {
-    // Player1: keys A, D for movement; W for shoot.
-    if (e.code === "KeyA" || e.code === "KeyD" || e.code === "KeyW") {
+  } else if (gameMode === "multiplayer_local" || gameMode === "multiplayer_online") {
+    // Player1: keys A and D for movement, SPACE to shoot.
+    if (e.code === "KeyA" || e.code === "KeyD" || e.code === "Space") {
       keysP1[e.code] = true;
     }
-    // Player2: ArrowLeft, ArrowRight for movement; Enter (or NumpadEnter) for shoot.
-    if (e.code === "ArrowLeft" || e.code === "ArrowRight" ||
-        e.code === "Enter" || e.code === "NumpadEnter") {
+    // Player2: arrow keys for movement, Enter (or NumpadEnter) to shoot.
+    if (e.code === "ArrowLeft" || e.code === "ArrowRight" || e.code === "Enter" || e.code === "NumpadEnter") {
       keysP2[e.code] = true;
     }
   }
 });
 document.addEventListener('keyup', (e) => {
   if (gameMode === "singleplayer") {
-    if (e.code === "ArrowLeft" || e.code === "ArrowRight" ||
-        e.code === "Enter" || e.code === "NumpadEnter") {
+    if (e.code === "ArrowLeft" || e.code === "ArrowRight" || e.code === "Space") {
       keysP1[e.code] = false;
     }
-  } else if (gameMode === "multiplayer_local") {
-    if (e.code === "KeyA" || e.code === "KeyD" || e.code === "KeyW") {
+  } else if (gameMode === "multiplayer_local" || gameMode === "multiplayer_online") {
+    if (e.code === "KeyA" || e.code === "KeyD" || e.code === "Space") {
       keysP1[e.code] = false;
     }
-    if (e.code === "ArrowLeft" || e.code === "ArrowRight" ||
-        e.code === "Enter" || e.code === "NumpadEnter") {
+    if (e.code === "ArrowLeft" || e.code === "ArrowRight" || e.code === "Enter" || e.code === "NumpadEnter") {
       keysP2[e.code] = false;
     }
   }
@@ -241,10 +281,7 @@ let bullets = [];
 let invaderBullets = [];
 function shoot(player) {
   let now = Date.now();
-  let useCooldown = true;
-  if (speedyDoubleActive || speedyTripleActive) {
-    useCooldown = false;
-  }
+  let useCooldown = !(speedyDoubleActive || speedyTripleActive);
   if (useCooldown) {
     if (!player.lastShotTime) player.lastShotTime = 0;
     if (now - player.lastShotTime < SHOT_COOLDOWN) return;
@@ -256,16 +293,13 @@ function shoot(player) {
   }
   
   if (speedyTripleActive) {
-    // Triple shot: fire 3 bullets (center, left, right)
     bullets.push({ x: player.x + player.width/2, y: player.y, speed: 7 });
     bullets.push({ x: player.x + player.width/2 - 15, y: player.y, speed: 7 });
     bullets.push({ x: player.x + player.width/2 + 15, y: player.y, speed: 7 });
   } else if (speedyDoubleActive) {
-    // Double shot: fire 2 bullets (center and left)
     bullets.push({ x: player.x + player.width/2, y: player.y, speed: 7 });
     bullets.push({ x: player.x + player.width/2 - 15, y: player.y, speed: 7 });
   } else {
-    // Normal powerups: check for normal double shot
     if (normalDoubleShot > 0) {
       bullets.push({ x: player.x + player.width/2, y: player.y, speed: 7 });
       bullets.push({ x: player.x + player.width/2 - 10, y: player.y, speed: 7 });
@@ -278,7 +312,6 @@ function shoot(player) {
         if (player2) player2.speed = 5;
       }
     } else {
-      // Regular single shot.
       bullets.push({ x: player.x + player.width/2, y: player.y, speed: 7 });
     }
   }
@@ -368,6 +401,7 @@ function drawInvaders() {
   }
 }
 function drawBarriers() {
+  if (document.fullscreenElement) return;
   barriers.forEach(barrier => {
     if (barrier.health >= 8) ctx.fillStyle = '#0f0';
     else if (barrier.health >= 5) ctx.fillStyle = '#ff0';
@@ -418,7 +452,6 @@ function updateInvaders() {
   }
 }
 function updateBullets() {
-  // Update speedy powerup status
   if ((speedyDoubleActive || speedyTripleActive) && Date.now() > speedyExpire) {
     speedyDoubleActive = false;
     speedyTripleActive = false;
@@ -427,12 +460,12 @@ function updateBullets() {
   for (let i = bullets.length - 1; i >= 0; i--) {
     const bullet = bullets[i];
     bullet.y -= bullet.speed;
-    if (checkBarrierCollision(bullet)) { bullets.splice(i,1); continue; }
+    if (!document.fullscreenElement && checkBarrierCollision(bullet)) { bullets.splice(i,1); continue; }
     if (boss && boss.alive &&
         bullet.x > boss.x && bullet.x < boss.x + boss.width &&
         bullet.y > boss.y && bullet.y < boss.y + boss.height) {
       boss.health -= 1;
-      if (boss.health <= 0) { boss.alive = false; teamScore += 100; updateInfoDisplay(); }
+      if (boss.health <= 0) { boss.alive = false; teamScore += 100; updateInfoDisplay(); boss = null; }
       bullets.splice(i,1);
       continue;
     }
@@ -454,7 +487,7 @@ function updateBullets() {
   for (let i = invaderBullets.length - 1; i >= 0; i--) {
     const bullet = invaderBullets[i];
     bullet.y += bullet.speed;
-    if (checkBarrierCollision(bullet)) { invaderBullets.splice(i,1); continue; }
+    if (!document.fullscreenElement && checkBarrierCollision(bullet)) { invaderBullets.splice(i,1); continue; }
     if (gameMode === "singleplayer") {
       if (bullet.x > player1.x && bullet.x < player1.x + player1.width &&
           bullet.y > player1.y && bullet.y < player1.y + player1.height) {
@@ -477,6 +510,7 @@ function updateBullets() {
   }
 }
 function checkBarrierCollision(bullet) {
+  if (document.fullscreenElement) return false;
   for (let i = barriers.length - 1; i >= 0; i--) {
     let barrier = barriers[i];
     if (bullet.x > barrier.x && bullet.x < barrier.x + barrier.width &&
@@ -544,25 +578,23 @@ function leaveGame() {
 }
 
 // ----- Player Movement & Drawing -----
-// For singleplayer, use Arrow keys and Enter for shooting.
-// For multiplayer_local:
-//   - Player1 (controlled with A/D for movement and W to shoot) – drawn in cyan.
-//   - Player2 (controlled with ArrowLeft/ArrowRight for movement and Enter for shooting) – drawn in white.
+// Singleplayer: use arrow keys and SPACE to shoot.
+// Multiplayer_local/online:
+//   - Player1: controlled with A/D (movement) and SPACE to shoot (drawn in white).
+//   - Player2: controlled with arrow keys (movement) and ENTER to shoot (drawn in cyan).
 function handlePlayerMovement() {
   if (gameMode === "singleplayer") {
     if (player1.lives > 0) {
       if (keysP1["ArrowLeft"]) { player1.x -= player1.speed; if (player1.x < 0) player1.x = 0; }
       if (keysP1["ArrowRight"]) { player1.x += player1.speed; if (player1.x + player1.width > canvas.width) player1.x = canvas.width - player1.width; }
-      if (keysP1["Enter"] || keysP1["NumpadEnter"]) { shoot(player1); keysP1["Enter"] = keysP1["NumpadEnter"] = false; }
+      if (keysP1["Space"]) { shoot(player1); keysP1["Space"] = false; }
     }
   } else {
-    // Multiplayer: Player1 (A/D, W) is controlled by keysP1 and drawn in cyan.
     if (player1.lives > 0) {
       if (keysP1["KeyA"]) { player1.x -= player1.speed; if (player1.x < 0) player1.x = 0; }
       if (keysP1["KeyD"]) { player1.x += player1.speed; if (player1.x + player1.width > canvas.width) player1.x = canvas.width - player1.width; }
-      if (keysP1["KeyW"]) { shoot(player1); keysP1["KeyW"] = false; }
+      if (keysP1["Space"]) { shoot(player1); keysP1["Space"] = false; }
     }
-    // Player2 (arrow keys, Enter) is controlled by keysP2 and drawn in white.
     if (player2.lives > 0) {
       if (keysP2["ArrowLeft"]) { player2.x -= player2.speed; if (player2.x < 0) player2.x = 0; }
       if (keysP2["ArrowRight"]) { player2.x += player2.speed; if (player2.x + player2.width > canvas.width) player2.x = canvas.width - player2.width; }
@@ -576,7 +608,7 @@ function draw() {
   handlePlayerMovement();
   drawInvaders();
   updateBullets();
-  drawBarriers();
+  if (!document.fullscreenElement) { drawBarriers(); }
   ctx.fillStyle = 'yellow';
   bullets.forEach(bullet => { ctx.fillRect(bullet.x, bullet.y, 5, 10); });
   ctx.fillStyle = 'red';
@@ -594,19 +626,19 @@ function draw() {
     }
   } else {
     if (player1.lives > 0) {
-      ctx.fillStyle = 'cyan';
+      ctx.fillStyle = 'white';
       ctx.fillRect(player1.x, player1.y, player1.width, player1.height);
       if (player1.shieldActive) {
-        ctx.strokeStyle = 'cyan';
+        ctx.strokeStyle = 'white';
         ctx.lineWidth = 3;
         ctx.strokeRect(player1.x - 5, player1.y - 5, player1.width + 10, player1.height + 10);
       }
     }
     if (player2.lives > 0) {
-      ctx.fillStyle = 'white';
+      ctx.fillStyle = 'cyan';
       ctx.fillRect(player2.x, player2.y, player2.width, player2.height);
       if (player2.shieldActive) {
-        ctx.strokeStyle = 'white';
+        ctx.strokeStyle = 'cyan';
         ctx.lineWidth = 3;
         ctx.strokeRect(player2.x - 5, player2.y - 5, player2.width + 10, player2.height + 10);
       }
@@ -632,7 +664,7 @@ function initGame() {
   if (gameMode === "singleplayer") {
     player1 = { x: canvas.width/2 - 20, y: canvas.height - 50, width: 40, height: 20, speed: 5, lives: 3, shieldActive: false, shieldCooldown: false, lastShotTime: 0 };
   } else {
-    // Multiplayer: Player1 (A/D, W) is our first player, Player2 (arrow keys, Enter) is second.
+    // Multiplayer: Player1 (A/D, SPACE) is white; Player2 (arrow keys, ENTER) is cyan.
     player1 = { x: canvas.width/2 - 100, y: canvas.height - 50, width: 40, height: 20, speed: 5, lives: 3, shieldActive: false, shieldCooldown: false, lastShotTime: 0 };
     player2 = { x: canvas.width/2 + 60, y: canvas.height - 50, width: 40, height: 20, speed: 5, lives: 3, shieldActive: false, shieldCooldown: false, lastShotTime: 0 };
   }

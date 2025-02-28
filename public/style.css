@@ -1,117 +1,125 @@
 /* General Styles */
 body {
-    margin: 0;
-    padding: 0;
-    background: linear-gradient(135deg, #000000, #3a3a3a);
-    color: #fff;
-    font-family: 'Orbitron', sans-serif;
-    text-align: center;
-  }
-  
-  h1, h2 {
-    margin-top: 20px;
-    text-shadow: 2px 2px 4px rgba(0,0,0,0.6);
-  }
-  
-  /* Buttons */
-  button {
-    margin: 10px;
-    padding: 10px 20px;
-    cursor: pointer;
-    background-color: #0077cc;
-    color: #fff;
-    border: none;
-    border-radius: 5px;
-    transition: background-color 0.3s, transform 0.2s;
-  }
-  
-  button:hover {
-    background-color: #005fa3;
-    transform: scale(1.05);
-  }
-  
-  /* Canvas */
-  canvas {
-    border: 2px solid #fff;
-    background: #000;
-    display: block;
-    margin: 20px auto;
-    box-shadow: 0 0 30px rgba(0,255,255,0.4);
-  }
-  
-  /* Containers & Screens */
-  #landing,
-  #multiplayerOptions,
-  #waitingScreen,
-  #gameContainer {
-    padding: 20px;
-  }
-  
-  /* Shop Overlay */
-  #shop {
-    text-align: center;
-    display: none;
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background-color: rgba(50,50,50,0.95);
-    color: #fff;
-    padding: 30px;
-    border: 2px solid #fff;
-    border-radius: 10px;
-    z-index: 100;
-    box-shadow: 0 0 20px rgba(255,255,255,0.2);
-  }
-  
-  /* Powerup Buttons */
-  .powerup {
-    display: inline-block;
-    margin: 10px;
-    padding: 10px 15px;
-    border: 1px solid #fff;
-    cursor: pointer;
-    background-color: #333;
-    color: #fff;
-    transition: background-color 0.3s;
-    border-radius: 5px;
-  }
-  
-  .powerup:hover {
-    background-color: #555;
-  }
-  
-  /* Info Display */
-  #info {
-    margin-top: 10px;
-    color: #fff;
-  }
-  
-  #info span {
-    margin: 0 10px;
-    font-size: 1.1em;
-  }
-  
-  /* Shield Cooldown Display */
-  #shieldCooldown {
-    display: none;
-    margin-top: 10px;
-    color: #fff;
-  }
-  
-  /* Game Over Popup */
-  #gameOverPopup {
-    display: none;
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background-color: rgba(50,50,50,0.95);
-    color: #fff;
-    padding: 30px;
-    border: 2px solid #fff;
-    border-radius: 10px;
-    text-align: center;
-    z-index: 100;
-  }
-  
+  margin: 0;
+  padding: 0;
+  background: linear-gradient(135deg, #000000, #3a3a3a);
+  color: #fff;
+  font-family: 'Orbitron', sans-serif;
+  text-align: center;
+}
+
+/* Headings */
+h1, h2 {
+  margin-top: 20px;
+  text-shadow: 2px 2px 4px rgba(0,0,0,0.6);
+}
+
+/* Buttons */
+button {
+  margin: 10px;
+  padding: 10px 20px;
+  cursor: pointer;
+  background-color: #0077cc;
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  transition: background-color 0.3s, transform 0.2s;
+}
+button:hover {
+  background-color: #005fa3;
+  transform: scale(1.05);
+}
+
+/* Canvas */
+canvas {
+  border: 2px solid #fff;
+  background: #000;
+  display: block;
+  margin: 20px auto;
+  box-shadow: 0 0 30px rgba(0,255,255,0.4);
+}
+
+/* Containers & Screens */
+#landing,
+#multiplayerOptions,
+#waitingScreen,
+#gameContainer,
+#lobbyScreen {
+  padding: 20px;
+}
+
+/* Shop Overlay */
+#shop {
+  text-align: center;
+  display: none;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: rgba(50,50,50,0.95);
+  color: #fff;
+  padding: 30px;
+  border: 2px solid #fff;
+  border-radius: 10px;
+  z-index: 100;
+  box-shadow: 0 0 20px rgba(255,255,255,0.2);
+}
+
+/* Powerup Buttons */
+.powerup {
+  display: inline-block;
+  margin: 10px;
+  padding: 10px 15px;
+  border: 1px solid #fff;
+  cursor: pointer;
+  background-color: #333;
+  color: #fff;
+  transition: background-color 0.3s;
+  border-radius: 5px;
+}
+.powerup:hover {
+  background-color: #555;
+}
+
+/* Info Display */
+#info {
+  margin-top: 10px;
+  color: #fff;
+}
+#info span {
+  margin: 0 10px;
+  font-size: 1.1em;
+}
+
+/* Shield Cooldown Display */
+#shieldCooldown {
+  display: none;
+  margin-top: 10px;
+  color: #fff;
+}
+
+/* Game Over Popup */
+#gameOverPopup {
+  display: none;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: rgba(50,50,50,0.95);
+  color: #fff;
+  padding: 30px;
+  border: 2px solid #fff;
+  border-radius: 10px;
+  text-align: center;
+  z-index: 100;
+}
+
+/* Fullscreen Adjustments */
+:fullscreen #info {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  background: rgba(0,0,0,0.5);
+  padding: 5px;
+  border-radius: 5px;
+}
