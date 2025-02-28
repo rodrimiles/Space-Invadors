@@ -48,6 +48,21 @@ canvas {
   padding: 20px;
 }
 
+/* Lobby Screen Styles */
+#lobbyScreen {
+  background: rgba(0,0,0,0.7);
+  border: 2px solid #0077cc;
+  border-radius: 10px;
+  margin: 20px auto;
+  max-width: 400px;
+}
+#lobbyScreen input, #lobbyScreen select {
+  margin: 5px;
+  padding: 5px;
+  width: 80%;
+  max-width: 300px;
+}
+
 /* Shop Overlay */
 #shop {
   text-align: center;

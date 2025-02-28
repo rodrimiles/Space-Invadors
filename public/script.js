@@ -1,7 +1,7 @@
 // ----- Socket.IO Setup for Online Multiplayer -----
 let socket = null;
 if (typeof io !== 'undefined') {
-  socket = io(); // auto-connect if available
+  socket = io();
 }
 
 // ----- Lobby UI for Online Multiplayer -----
@@ -16,9 +16,7 @@ socket && socket.on("lobbyList", (lobbies) => {
   lobbies.forEach(lobby => {
     const li = document.createElement("li");
     li.innerText = `${lobby.id} (${lobby.players.length}/2)`;
-    li.onclick = () => {
-      document.getElementById("lobbySelect").value = lobby.id;
-    };
+    li.onclick = () => { document.getElementById("lobbySelect").value = lobby.id; };
     lobbyList.appendChild(li);
   });
 });
@@ -52,7 +50,13 @@ socket && socket.on("lobbyJoined", (data) => {
   }
 });
 
-// ----- Mode Selection & Navigation (for offline/local modes) -----
+function backToLandingLobby() {
+  // Hide lobby screen and show landing screen
+  lobbyScreen.style.display = "none";
+  document.getElementById("landing").style.display = "block";
+}
+
+// ----- Mode Selection & Navigation (for offline/local) -----
 function selectMode(mode) {
   if (mode === "singleplayer") {
     gameMode = "singleplayer";
@@ -69,7 +73,7 @@ function selectMode(mode) {
 function selectMultiplayer(option) {
   if (option === "online") {
     gameMode = "multiplayer_online";
-    // Lobby screen handles online mode.
+    // Lobby screen will handle online mode.
   } else if (option === "local") {
     gameMode = "multiplayer_local";
     startGame();
@@ -118,10 +122,10 @@ let speedyExpire = 0;
 const SHOT_COOLDOWN = 300;
 
 // Player objects
-// In singleplayer, use A/D to move and SPACE to shoot.
-// In multiplayer online/local:
-//   - Player1 (controlled with A/D for movement and SPACE to shoot) is white.
-//   - Player2 (controlled with arrow keys for movement and ENTER to shoot) is cyan.
+// Singleplayer: use A/D for movement and SPACE to shoot.
+// Multiplayer online/local:
+//   - Player1 (A/D, SPACE) is white.
+//   - Player2 (Arrow keys, ENTER) is cyan.
 let player1, player2;
 
 let barriers = [];
@@ -248,12 +252,11 @@ document.addEventListener('keydown', (e) => {
       keysP1[e.code] = true;
     }
   } else if (gameMode === "multiplayer_local" || gameMode === "multiplayer_online") {
-    // For multiplayer:
-    // Player1: A/D for movement, SPACE to shoot (drawn in white)
+    // Player1 (A/D, SPACE) is white.
     if (e.code === "KeyA" || e.code === "KeyD" || e.code === "Space") {
       keysP1[e.code] = true;
     }
-    // Player2: ArrowLeft/ArrowRight for movement, Enter (or NumpadEnter) to shoot (drawn in cyan)
+    // Player2 (Arrow keys, ENTER) is cyan.
     if (e.code === "ArrowLeft" || e.code === "ArrowRight" || e.code === "Enter" || e.code === "NumpadEnter") {
       keysP2[e.code] = true;
     }
@@ -291,10 +294,12 @@ function shoot(player) {
   }
   
   if (speedyTripleActive) {
+    // Triple shot
     bullets.push({ x: player.x + player.width/2, y: player.y, speed: 7 });
     bullets.push({ x: player.x + player.width/2 - 15, y: player.y, speed: 7 });
     bullets.push({ x: player.x + player.width/2 + 15, y: player.y, speed: 7 });
   } else if (speedyDoubleActive) {
+    // Double shot
     bullets.push({ x: player.x + player.width/2, y: player.y, speed: 7 });
     bullets.push({ x: player.x + player.width/2 - 15, y: player.y, speed: 7 });
   } else {
@@ -328,6 +333,7 @@ function createInvaders() {
   boss = null;
   if ([5,10,15,20].includes(invaderLevel)) {
     let bossHealth = 20 + (invaderLevel - 5) * 5;
+    // Improved boss: add extra guard to prevent crashes
     boss = { x: canvas.width/2 - 100, y: 50, width: 200, height: 50, alive: true, health: bossHealth };
     invaders = [];
   } else {
@@ -367,22 +373,28 @@ function drawInvader(invader) {
   }
 }
 function drawBoss(boss) {
-  let gradient = ctx.createRadialGradient(
-    boss.x + boss.width/2, boss.y + boss.height/2, 10,
-    boss.x + boss.width/2, boss.y + boss.height/2, boss.width/2
-  );
-  gradient.addColorStop(0, '#FF0000');
-  gradient.addColorStop(1, '#660000');
-  ctx.fillStyle = gradient;
-  ctx.fillRect(boss.x, boss.y, boss.width, boss.height);
-  ctx.strokeStyle = '#FFFFFF';
-  ctx.lineWidth = 3;
-  ctx.strokeRect(boss.x, boss.y, boss.width, boss.height);
-  ctx.fillStyle = '#FFF';
-  ctx.fillRect(boss.x, boss.y - 10, boss.width, 5);
-  ctx.fillStyle = '#0F0';
-  let maxHealth = 20 + (invaderLevel - 5) * 5;
-  ctx.fillRect(boss.x, boss.y - 10, boss.width * (boss.health / maxHealth), 5);
+  // Wrap boss drawing in a try/catch block for extra safety
+  try {
+    let gradient = ctx.createRadialGradient(
+      boss.x + boss.width/2, boss.y + boss.height/2, 10,
+      boss.x + boss.width/2, boss.y + boss.height/2, boss.width/2
+    );
+    gradient.addColorStop(0, '#FF0000');
+    gradient.addColorStop(1, '#660000');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(boss.x, boss.y, boss.width, boss.height);
+    ctx.strokeStyle = '#FFFFFF';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(boss.x, boss.y, boss.width, boss.height);
+    ctx.fillStyle = '#FFF';
+    ctx.fillRect(boss.x, boss.y - 10, boss.width, 5);
+    ctx.fillStyle = '#0F0';
+    let maxHealth = 20 + (invaderLevel - 5) * 5;
+    ctx.fillRect(boss.x, boss.y - 10, boss.width * (boss.health / maxHealth), 5);
+  } catch (err) {
+    console.error("Error drawing boss:", err);
+    boss = null;
+  }
 }
 function drawInvaders() {
   if (boss) {
@@ -463,7 +475,12 @@ function updateBullets() {
         bullet.x > boss.x && bullet.x < boss.x + boss.width &&
         bullet.y > boss.y && bullet.y < boss.y + boss.height) {
       boss.health -= 1;
-      if (boss.health <= 0) { boss.alive = false; teamScore += 100; updateInfoDisplay(); boss = null; }
+      if (boss.health <= 0) {
+        boss.alive = false;
+        teamScore += 100;
+        updateInfoDisplay();
+        boss = null;
+      }
       bullets.splice(i,1);
       continue;
     }
@@ -474,7 +491,11 @@ function updateBullets() {
             bullet.x > invader.x && bullet.x < invader.x + invaderWidth &&
             bullet.y > invader.y && bullet.y < invader.y + invaderHeight) {
           invader.health -= 1;
-          if (invader.health <= 0) { invader.alive = false; teamScore += 5; updateInfoDisplay(); }
+          if (invader.health <= 0) {
+            invader.alive = false;
+            teamScore += 5;
+            updateInfoDisplay();
+          }
           bullets.splice(i,1);
           break;
         }
@@ -576,8 +597,6 @@ function leaveGame() {
 }
 
 // ----- Player Movement & Drawing -----
-// Singleplayer: use arrow keys and SPACE to shoot (but here we want singleplayer to use A/D & SPACE).
-// So for singleplayer, we now use keys "KeyA" and "KeyD" for movement and "Space" for shooting.
 function handlePlayerMovement() {
   if (gameMode === "singleplayer") {
     if (player1.lives > 0) {
@@ -586,8 +605,7 @@ function handlePlayerMovement() {
       if (keysP1["Space"]) { shoot(player1); keysP1["Space"] = false; }
     }
   } else {
-    // Multiplayer:
-    // Player1 (A/D, SPACE) is white.
+    // Multiplayer: Player1 (A/D, SPACE) is white.
     if (player1.lives > 0) {
       if (keysP1["KeyA"]) { player1.x -= player1.speed; if (player1.x < 0) player1.x = 0; }
       if (keysP1["KeyD"]) { player1.x += player1.speed; if (player1.x + player1.width > canvas.width) player1.x = canvas.width - player1.width; }
@@ -661,12 +679,8 @@ function draw() {
 }
 function initGame() {
   if (gameMode === "singleplayer") {
-    // Singleplayer: move with A/D and shoot with SPACE.
     player1 = { x: canvas.width/2 - 20, y: canvas.height - 50, width: 40, height: 20, speed: 5, lives: 3, shieldActive: false, shieldCooldown: false, lastShotTime: 0 };
   } else {
-    // Multiplayer online/local:
-    // Player1: controlled with A/D and SPACE to shoot (white).
-    // Player2: controlled with arrow keys and ENTER to shoot (cyan).
     player1 = { x: canvas.width/2 - 100, y: canvas.height - 50, width: 40, height: 20, speed: 5, lives: 3, shieldActive: false, shieldCooldown: false, lastShotTime: 0 };
     player2 = { x: canvas.width/2 + 60, y: canvas.height - 50, width: 40, height: 20, speed: 5, lives: 3, shieldActive: false, shieldCooldown: false, lastShotTime: 0 };
   }

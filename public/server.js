@@ -9,7 +9,7 @@ const io = socketIo(server);
 // Serve static files from the current directory
 app.use(express.static(__dirname));
 
-// Explicitly serve index.html at root
+// Serve index.html at root
 app.get('/', (req, res) => {
   res.sendFile(__dirname + '/index.html');
 });
