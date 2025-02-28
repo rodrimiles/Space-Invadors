@@ -1,3 +1,8 @@
+// script.js
+
+let gameMode; // Global game mode variable
+let currentLobbyId = null; // To store the lobby ID after creation
+
 // ----- Socket.IO Setup for Online Multiplayer -----
 let socket = null;
 if (typeof io !== 'undefined') {
@@ -5,17 +10,13 @@ if (typeof io !== 'undefined') {
 }
 
 // ----- Lobby UI for Online Multiplayer -----
-const lobbyScreen = document.getElementById("lobbyScreen");
-if (socket) {
-  lobbyScreen.style.display = "block";
-}
-
+// Update lobby list
 socket && socket.on("lobbyList", (lobbies) => {
   const lobbyList = document.getElementById("lobbyList");
   lobbyList.innerHTML = "";
   lobbies.forEach(lobby => {
     const li = document.createElement("li");
-    li.innerText = `${lobby.id} (${lobby.players.length}/2)`;
+    li.innerText = `${lobby.lobbyName} (${lobby.id}) - (${lobby.players.length}/2)`;
     li.onclick = () => { document.getElementById("lobbySelect").value = lobby.id; };
     lobbyList.appendChild(li);
   });
@@ -24,54 +25,81 @@ socket && socket.on("lobbyList", (lobbies) => {
 // --- Helper Function: Update Waiting Room Table ---
 function updateLobbyPlayersTable(lobby) {
   const tableBody = document.getElementById("lobbyPlayersBody");
-  tableBody.innerHTML = ""; // Clear previous entries
+  tableBody.innerHTML = "";
   lobby.players.forEach(player => {
     const row = document.createElement("tr");
     const cell = document.createElement("td");
-    cell.innerText = player.name; // Assuming each player object has a 'name'
+    cell.innerText = player.name;
     row.appendChild(cell);
     tableBody.appendChild(row);
   });
 }
 
-// --- Listen for Server Updates on the Lobby ---
+// Socket event: lobby update
 socket && socket.on("lobbyUpdate", (lobby) => {
   updateLobbyPlayersTable(lobby);
+  if (lobby.players.length === 2) {
+    document.getElementById("waitingScreen").style.display = "none";
+    startGame();
+  }
+});
+
+// Socket event: lobby cancelled
+socket && socket.on("lobbyCancelled", (data) => {
+  alert(data.message);
+  backToLanding();
 });
 
 // ----- Create and Join Lobby Functions -----
 function createLobby() {
-  const name = document.getElementById("createName").value;
+  const createName = document.getElementById("createName").value;
+  const lobbyName = document.getElementById("lobbyName").value;
   const type = document.getElementById("lobbyType").value;
   const password = document.getElementById("lobbyPassword").value;
-  if (!name) { alert("Enter your name."); return; }
-  socket.emit("createLobby", { name, private: type === "private", password });
+  if (!createName || !lobbyName) {
+    alert("Enter both your username and a lobby name.");
+    return;
+  }
+  socket.emit("createLobby", { createName, lobbyName, private: type === "private", password });
 }
+
 socket && socket.on("lobbyCreated", (data) => {
-  lobbyScreen.style.display = "none";
-  // Show waiting screen with lobby player list
+  currentLobbyId = data.lobbyId;
+  document.getElementById("lobbyScreen").style.display = "none";
   document.getElementById("waitingScreen").style.display = "block";
   updateLobbyPlayersTable(data.lobby);
 });
 
 function joinLobby() {
-  const name = document.getElementById("joinName").value;
+  const joinName = document.getElementById("joinName").value;
   const lobbyId = document.getElementById("lobbySelect").value;
   const password = document.getElementById("joinPassword").value;
-  if (!name) { alert("Enter your name."); return; }
-  socket.emit("joinLobby", { lobbyId, name, password });
+  if (!joinName) {
+    alert("Enter your username.");
+    return;
+  }
+  socket.emit("joinLobby", { lobbyId, joinName, password });
 }
+
 socket && socket.on("joinError", (data) => {
   alert(data.message);
 });
-socket && socket.on("lobbyJoined", (data) => {
-  updateLobbyPlayersTable(data.lobby);
-  // When two players are in the lobby, start the game
-  if (data.lobby.players.length === 2) {
-    document.getElementById("waitingScreen").style.display = "none";
-    startGame();
+
+// Cancel lobby creation
+function cancelCreateLobby() {
+  if (currentLobbyId) {
+    socket.emit("cancelLobby", { lobbyId: currentLobbyId });
+    currentLobbyId = null;
   }
-});
+  document.getElementById("lobbyScreen").style.display = "none";
+  document.getElementById("multiplayerOptions").style.display = "block";
+}
+
+// Cancel join lobby
+function cancelJoinLobby() {
+  document.getElementById("lobbyScreen").style.display = "none";
+  document.getElementById("multiplayerOptions").style.display = "block";
+}
 
 // ----- Navigation Functions -----
 function backToLanding() {
@@ -87,13 +115,8 @@ function selectMode(mode) {
     document.getElementById("landingScreen").style.display = "none";
     startGame();
   } else if (mode === "multiplayer") {
-    if (socket) {
-      document.getElementById("landingScreen").style.display = "none";
-      lobbyScreen.style.display = "block";
-    } else {
-      document.getElementById("landingScreen").style.display = "none";
-      document.getElementById("multiplayerOptions").style.display = "block";
-    }
+    document.getElementById("landingScreen").style.display = "none";
+    document.getElementById("multiplayerOptions").style.display = "block";
   }
 }
 
@@ -101,7 +124,7 @@ function selectMultiplayer(option) {
   if (option === "online") {
     gameMode = "multiplayer_online";
     document.getElementById("multiplayerOptions").style.display = "none";
-    lobbyScreen.style.display = "block";
+    document.getElementById("lobbyScreen").style.display = "block";
   } else if (option === "local") {
     gameMode = "multiplayer_local";
     document.getElementById("multiplayerOptions").style.display = "none";
@@ -125,8 +148,9 @@ function backToLandingLobby() {
 }
 
 function startGame() {
-  // Hide all menus
-  if (lobbyScreen) lobbyScreen.style.display = "none";
+  if (document.getElementById("lobbyScreen")) {
+    document.getElementById("lobbyScreen").style.display = "none";
+  }
   document.getElementById("multiplayerOptions").style.display = "none";
   document.getElementById("waitingScreen").style.display = "none";
   document.getElementById("landingScreen").style.display = "none";
@@ -136,6 +160,8 @@ function startGame() {
 }
 
 // ----- Game Variables & Setup -----
+// (The rest of your game code remains unchanged below this point)
+
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 let animationFrameId;
@@ -175,7 +201,6 @@ function createBarriers() {
 }
 
 let boss = null;
-
 function updateInfoDisplay() {
   if (gameMode === "singleplayer") {
     document.getElementById('lives').innerText = `Lives: ${player1.lives}`;
@@ -187,6 +212,8 @@ function updateInfoDisplay() {
 }
 
 // ----- Shop Powerup Purchase -----
+// (Remaining game code continues as before...)
+
 function buyPowerup(type) {
   if (type === 'speed') {
     if (teamScore >= 500 && normalSpeedBoost === 0) {
@@ -225,7 +252,6 @@ function buyPowerup(type) {
   }
 }
 
-// ----- Activate Shield -----
 function activateShield() {
   shieldActive = true;
   if (player1) { player1.shieldActive = true; player1.shieldCooldown = true; }
@@ -249,7 +275,6 @@ function activateShield() {
   }, 10000);
 }
 
-// ----- Toggle Shop Popup -----
 function toggleShop() {
   const shop = document.getElementById('shop');
   if (shop.style.display === 'none' || shop.style.display === '') {
@@ -263,7 +288,6 @@ function toggleShop() {
   }
 }
 
-// ----- Toggle Fullscreen -----
 function toggleFullscreen() {
   if (!document.fullscreenElement) {
     canvas.requestFullscreen().catch(err => { alert(`Error: ${err.message}`); });
@@ -272,7 +296,6 @@ function toggleFullscreen() {
   }
 }
 
-// ----- Scoreboard Toggle & Update -----
 function toggleScoreboard() {
   const scoreboard = document.getElementById("scoreboard");
   if (scoreboard.style.display === "none" || scoreboard.style.display === "") {
@@ -294,7 +317,6 @@ function updateScoreboard() {
   document.getElementById("scoreboardContent").innerHTML = content;
 }
 
-// ----- Input Handling -----
 const keysP1 = {};
 const keysP2 = {};
 document.addEventListener('keydown', (e) => {
@@ -329,7 +351,6 @@ document.addEventListener('keyup', (e) => {
   }
 });
 
-// ----- Bullet Firing & Cooldown -----
 let bullets = [];
 let invaderBullets = [];
 function shoot(player) {
@@ -370,7 +391,6 @@ function shoot(player) {
   }
 }
 
-// ----- Invaders & Boss -----
 let invaders = [];
 const invaderRows = 3;
 const invaderCols = 10;
@@ -405,7 +425,6 @@ function createInvaders() {
 }
 createInvaders();
 
-// ----- Drawing Functions -----
 function drawInvader(invader) {
   let gradient = ctx.createRadialGradient(
     invader.x + invaderWidth/2, invader.y + invaderHeight/2, 5,
@@ -470,7 +489,6 @@ function drawBarriers() {
   });
 }
 
-// ----- Update Functions -----
 function updateInvaders() {
   if (boss) {
     boss.x += bossDirection * invaderSpeed;
@@ -599,7 +617,6 @@ function checkAllEnemiesDefeated() {
   return true;
 }
 
-// ----- Next Level & Game Over -----
 function nextLevel() {
   if (gameMode === "multiplayer_local" || gameMode === "multiplayer_online") {
     if (player1.lives === 0) { player1.lives = 1; }
@@ -644,7 +661,6 @@ function leaveGame() {
   window.location.href = "about:blank";
 }
 
-// ----- Player Movement & Drawing -----
 function handlePlayerMovement() {
   if (gameMode === "singleplayer") {
     if (player1.lives > 0) {
