@@ -72,6 +72,22 @@
     <button onclick="backToLanding()">Back</button>
   </div>
 
+  <!-- Waiting Screen (for Online Multiplayer) -->
+  <div id="waitingScreen" style="display:none;">
+    <h2>Waiting for other player...</h2>
+    <table id="lobbyPlayersTable">
+      <thead>
+        <tr>
+          <th>Player Name</th>
+        </tr>
+      </thead>
+      <tbody id="lobbyPlayersBody">
+        <!-- Player rows will be dynamically added here -->
+      </tbody>
+    </table>
+    <button onclick="cancelWaiting()">Cancel</button>
+  </div>
+
   <!-- Multiplayer Options for Offline/Local -->
   <div id="multiplayerOptions" style="display:none;">
     <h2>Multiplayer Options</h2>
@@ -79,16 +95,16 @@
     <button onclick="selectMultiplayer('local')">Local Multiplayer</button>
     <button onclick="backToLanding()">Back</button>
   </div>
-  <div id="waitingScreen" style="display:none;">
-    <h2>Waiting for other player...</h2>
-    <button onclick="cancelWaiting()">Cancel</button>
-  </div>
 
   <!-- Game Container -->
   <div id="gameContainer" style="display:none;">
     <canvas id="gameCanvas" width="800" height="600"></canvas>
     <button id="shopButton" onclick="toggleShop()">Shop (S)</button>
     <button id="fullscreenButton" onclick="toggleFullscreen()">Fullscreen (F)</button>
+    <!-- New Scoreboard Button -->
+    <button id="scoreboardButton" onclick="toggleScoreboard()">Scoreboard</button>
+    
+    <!-- Shop Popup -->
     <div id="shop">
       <h2>Shop</h2>
       <div class="powerup" onclick="buyPowerup('speed')">Speed Boost (500 pts)</div>
@@ -99,6 +115,16 @@
       <br>
       <button onclick="toggleShop()">Close</button>
     </div>
+    
+    <!-- Scoreboard Popup -->
+    <div id="scoreboard" style="display:none;">
+      <h2>Scoreboard</h2>
+      <div id="scoreboardContent">
+        <!-- Score information will be injected here -->
+      </div>
+      <button onclick="toggleScoreboard()">Close</button>
+    </div>
+    
     <div id="info">
       <span id="lives">Lives: </span>
       <span id="score">Score: 0</span>

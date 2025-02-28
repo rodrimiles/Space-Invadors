@@ -21,6 +21,25 @@ socket && socket.on("lobbyList", (lobbies) => {
   });
 });
 
+// --- Helper Function: Update Waiting Room Table ---
+function updateLobbyPlayersTable(lobby) {
+  const tableBody = document.getElementById("lobbyPlayersBody");
+  tableBody.innerHTML = ""; // Clear previous entries
+  lobby.players.forEach(player => {
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.innerText = player.name; // Assuming each player object has a 'name'
+    row.appendChild(cell);
+    tableBody.appendChild(row);
+  });
+}
+
+// --- Listen for Server Updates on the Lobby ---
+socket && socket.on("lobbyUpdate", (lobby) => {
+  updateLobbyPlayersTable(lobby);
+});
+
+// ----- Create and Join Lobby Functions -----
 function createLobby() {
   const name = document.getElementById("createName").value;
   const type = document.getElementById("lobbyType").value;
@@ -30,7 +49,9 @@ function createLobby() {
 }
 socket && socket.on("lobbyCreated", (data) => {
   lobbyScreen.style.display = "none";
-  startGame();
+  // Show waiting screen with lobby player list
+  document.getElementById("waitingScreen").style.display = "block";
+  updateLobbyPlayersTable(data.lobby);
 });
 
 function joinLobby() {
@@ -44,21 +65,22 @@ socket && socket.on("joinError", (data) => {
   alert(data.message);
 });
 socket && socket.on("lobbyJoined", (data) => {
+  updateLobbyPlayersTable(data.lobby);
+  // When two players are in the lobby, start the game
   if (data.lobby.players.length === 2) {
-    lobbyScreen.style.display = "none";
+    document.getElementById("waitingScreen").style.display = "none";
     startGame();
   }
 });
 
+// ----- Navigation Functions -----
 function backToLanding() {
-  // Hide any submenu and show the main landing screen
   document.getElementById("lobbyScreen").style.display = "none";
   document.getElementById("multiplayerOptions").style.display = "none";
   document.getElementById("guideScreen").style.display = "none";
   document.getElementById("landingScreen").style.display = "block";
 }
 
-// ----- Mode Selection & Navigation -----
 function selectMode(mode) {
   if (mode === "singleplayer") {
     gameMode = "singleplayer";
@@ -94,13 +116,11 @@ function cancelWaiting() {
 }
 
 function showGuide() {
-  // Hide landing and show guide
   document.getElementById("landingScreen").style.display = "none";
   document.getElementById("guideScreen").style.display = "block";
 }
 
 function backToLandingLobby() {
-  // Back button in the lobby screen
   backToLanding();
 }
 
@@ -243,13 +263,35 @@ function toggleShop() {
   }
 }
 
-// ----- Fullscreen Toggle -----
+// ----- Toggle Fullscreen -----
 function toggleFullscreen() {
   if (!document.fullscreenElement) {
     canvas.requestFullscreen().catch(err => { alert(`Error: ${err.message}`); });
   } else {
     document.exitFullscreen();
   }
+}
+
+// ----- Scoreboard Toggle & Update -----
+function toggleScoreboard() {
+  const scoreboard = document.getElementById("scoreboard");
+  if (scoreboard.style.display === "none" || scoreboard.style.display === "") {
+    updateScoreboard();
+    scoreboard.style.display = "block";
+  } else {
+    scoreboard.style.display = "none";
+  }
+}
+
+function updateScoreboard() {
+  let content = `<p>Team Score: ${teamScore}</p>`;
+  if (gameMode === "multiplayer_local" || gameMode === "multiplayer_online") {
+    content += `<p>Player 1 Lives: ${player1.lives}</p>`;
+    content += `<p>Player 2 Lives: ${player2.lives}</p>`;
+  } else {
+    content += `<p>Lives: ${player1.lives}</p>`;
+  }
+  document.getElementById("scoreboardContent").innerHTML = content;
 }
 
 // ----- Input Handling -----
@@ -260,16 +302,13 @@ document.addEventListener('keydown', (e) => {
   if (e.key.toLowerCase() === 's') toggleShop();
   
   if (gameMode === "singleplayer") {
-    // Singleplayer: use A/D for movement and SPACE to shoot.
     if (e.code === "KeyA" || e.code === "KeyD" || e.code === "Space") {
       keysP1[e.code] = true;
     }
   } else if (gameMode === "multiplayer_local" || gameMode === "multiplayer_online") {
-    // Player1 (A/D, SPACE) is white.
     if (e.code === "KeyA" || e.code === "KeyD" || e.code === "Space") {
       keysP1[e.code] = true;
     }
-    // Player2 (arrow keys, ENTER) is cyan.
     if (e.code === "ArrowLeft" || e.code === "ArrowRight" || e.code === "Enter" || e.code === "NumpadEnter") {
       keysP2[e.code] = true;
     }
@@ -614,13 +653,11 @@ function handlePlayerMovement() {
       if (keysP1["Space"]) { shoot(player1); keysP1["Space"] = false; }
     }
   } else {
-    // Multiplayer: Player1 (A/D, SPACE) is white.
     if (player1.lives > 0) {
       if (keysP1["KeyA"]) { player1.x -= player1.speed; if (player1.x < 0) player1.x = 0; }
       if (keysP1["KeyD"]) { player1.x += player1.speed; if (player1.x + player1.width > canvas.width) player1.x = canvas.width - player1.width; }
       if (keysP1["Space"]) { shoot(player1); keysP1["Space"] = false; }
     }
-    // Player2 (arrow keys, ENTER) is cyan.
     if (player2.lives > 0) {
       if (keysP2["ArrowLeft"]) { player2.x -= player2.speed; if (player2.x < 0) player2.x = 0; }
       if (keysP2["ArrowRight"]) { player2.x += player2.speed; if (player2.x + player2.width > canvas.width) player2.x = canvas.width - player2.width; }
