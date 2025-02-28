@@ -50,49 +50,67 @@ socket && socket.on("lobbyJoined", (data) => {
   }
 });
 
-function backToLandingLobby() {
-  // Hide lobby screen and show landing screen
-  lobbyScreen.style.display = "none";
-  document.getElementById("landing").style.display = "block";
+function backToLanding() {
+  // Hide any submenu and show the main landing screen
+  document.getElementById("lobbyScreen").style.display = "none";
+  document.getElementById("multiplayerOptions").style.display = "none";
+  document.getElementById("guideScreen").style.display = "none";
+  document.getElementById("landingScreen").style.display = "block";
 }
 
-// ----- Mode Selection & Navigation (for offline/local) -----
+// ----- Mode Selection & Navigation -----
 function selectMode(mode) {
   if (mode === "singleplayer") {
     gameMode = "singleplayer";
+    document.getElementById("landingScreen").style.display = "none";
     startGame();
   } else if (mode === "multiplayer") {
     if (socket) {
+      document.getElementById("landingScreen").style.display = "none";
       lobbyScreen.style.display = "block";
     } else {
-      document.getElementById("landing").style.display = "none";
+      document.getElementById("landingScreen").style.display = "none";
       document.getElementById("multiplayerOptions").style.display = "block";
     }
   }
 }
+
 function selectMultiplayer(option) {
   if (option === "online") {
     gameMode = "multiplayer_online";
-    // Lobby screen will handle online mode.
+    document.getElementById("multiplayerOptions").style.display = "none";
+    lobbyScreen.style.display = "block";
   } else if (option === "local") {
     gameMode = "multiplayer_local";
+    document.getElementById("multiplayerOptions").style.display = "none";
     startGame();
   }
 }
+
 function cancelWaiting() {
   gameMode = "";
   document.getElementById("waitingScreen").style.display = "none";
-  document.getElementById("landing").style.display = "block";
+  document.getElementById("landingScreen").style.display = "block";
 }
-function backToLanding() {
-  document.getElementById("multiplayerOptions").style.display = "none";
-  document.getElementById("landing").style.display = "block";
+
+function showGuide() {
+  // Hide landing and show guide
+  document.getElementById("landingScreen").style.display = "none";
+  document.getElementById("guideScreen").style.display = "block";
 }
+
+function backToLandingLobby() {
+  // Back button in the lobby screen
+  backToLanding();
+}
+
 function startGame() {
+  // Hide all menus
   if (lobbyScreen) lobbyScreen.style.display = "none";
-  document.getElementById("landing").style.display = "none";
   document.getElementById("multiplayerOptions").style.display = "none";
   document.getElementById("waitingScreen").style.display = "none";
+  document.getElementById("landingScreen").style.display = "none";
+  document.getElementById("guideScreen").style.display = "none";
   document.getElementById("gameContainer").style.display = "block";
   initGame();
 }
@@ -121,11 +139,6 @@ let speedyExpire = 0;
 
 const SHOT_COOLDOWN = 300;
 
-// Player objects
-// Singleplayer: use A/D for movement and SPACE to shoot.
-// Multiplayer online/local:
-//   - Player1 (A/D, SPACE) is white.
-//   - Player2 (Arrow keys, ENTER) is cyan.
 let player1, player2;
 
 let barriers = [];
@@ -247,7 +260,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key.toLowerCase() === 's') toggleShop();
   
   if (gameMode === "singleplayer") {
-    // In singleplayer, use A/D for movement and SPACE to shoot.
+    // Singleplayer: use A/D for movement and SPACE to shoot.
     if (e.code === "KeyA" || e.code === "KeyD" || e.code === "Space") {
       keysP1[e.code] = true;
     }
@@ -256,7 +269,7 @@ document.addEventListener('keydown', (e) => {
     if (e.code === "KeyA" || e.code === "KeyD" || e.code === "Space") {
       keysP1[e.code] = true;
     }
-    // Player2 (Arrow keys, ENTER) is cyan.
+    // Player2 (arrow keys, ENTER) is cyan.
     if (e.code === "ArrowLeft" || e.code === "ArrowRight" || e.code === "Enter" || e.code === "NumpadEnter") {
       keysP2[e.code] = true;
     }
@@ -294,12 +307,10 @@ function shoot(player) {
   }
   
   if (speedyTripleActive) {
-    // Triple shot
     bullets.push({ x: player.x + player.width/2, y: player.y, speed: 7 });
     bullets.push({ x: player.x + player.width/2 - 15, y: player.y, speed: 7 });
     bullets.push({ x: player.x + player.width/2 + 15, y: player.y, speed: 7 });
   } else if (speedyDoubleActive) {
-    // Double shot
     bullets.push({ x: player.x + player.width/2, y: player.y, speed: 7 });
     bullets.push({ x: player.x + player.width/2 - 15, y: player.y, speed: 7 });
   } else {
@@ -333,7 +344,6 @@ function createInvaders() {
   boss = null;
   if ([5,10,15,20].includes(invaderLevel)) {
     let bossHealth = 20 + (invaderLevel - 5) * 5;
-    // Improved boss: add extra guard to prevent crashes
     boss = { x: canvas.width/2 - 100, y: 50, width: 200, height: 50, alive: true, health: bossHealth };
     invaders = [];
   } else {
@@ -373,7 +383,6 @@ function drawInvader(invader) {
   }
 }
 function drawBoss(boss) {
-  // Wrap boss drawing in a try/catch block for extra safety
   try {
     let gradient = ctx.createRadialGradient(
       boss.x + boss.width/2, boss.y + boss.height/2, 10,

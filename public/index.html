@@ -4,12 +4,49 @@
   <meta charset="UTF-8">
   <title>Space Invaders Coop</title>
   <link rel="stylesheet" href="style.css">
-  <!-- Orbitron font -->
+  <!-- Orbitron font for a futuristic look -->
   <link href="https://fonts.googleapis.com/css2?family=Orbitron&display=swap" rel="stylesheet">
 </head>
 <body>
+  <!-- Landing Page: Three options -->
+  <div id="landingScreen">
+    <h1>Space Invaders Coop</h1>
+    <button onclick="selectMode('singleplayer')">Singleplayer</button>
+    <button onclick="selectMode('multiplayer')">Multiplayer</button>
+    <button onclick="showGuide()">How to Play</button>
+  </div>
+
+  <!-- Guide Screen -->
+  <div id="guideScreen" style="display:none;">
+    <h1>How to Play</h1>
+    <p>
+      <strong>Singleplayer:</strong> Use A and D keys to move and press SPACE to shoot.
+    </p>
+    <p>
+      <strong>Multiplayer:</strong> You have two options:
+      <br>
+      • <em>Online:</em> Create or join a lobby (max 2 players). When two players are in a lobby, the game starts.
+      <br>
+      • <em>Local:</em> The game starts immediately.
+    </p>
+    <p>
+      In multiplayer:
+      <br>
+      • Player 1 (controlled with A/D and SPACE) is displayed in white.
+      <br>
+      • Player 2 (controlled with arrow keys and ENTER) is displayed in cyan.
+    </p>
+    <p>
+      <strong>Boss:</strong> When the boss appears, shoot it. Its health decreases with each hit; when it reaches 0, it is removed and you earn 100 points.
+    </p>
+    <p>
+      <strong>Powerups:</strong> In the shop, you can buy normal powerups (Speed Boost, Shield, Double Shot) and new "speedy" powerups (which remove shot cooldown for 5 seconds and fire extra bullets).
+    </p>
+    <button onclick="backToLanding()">Back</button>
+  </div>
+
   <!-- Lobby Screen for Online Multiplayer -->
-  <div id="lobbyScreen">
+  <div id="lobbyScreen" style="display:none;">
     <h1>Online Lobby</h1>
     <div id="createLobby">
       <h2>Create Lobby</h2>
@@ -32,16 +69,10 @@
       <h2>Available Lobbies (Public)</h2>
       <ul id="lobbyList"></ul>
     </div>
-    <!-- Back button to return to landing screen -->
-    <button onclick="backToLandingLobby()">Back</button>
+    <button onclick="backToLanding()">Back</button>
   </div>
 
-  <!-- Offline / Local Screens -->
-  <div id="landing" style="display:none;">
-    <h1>Space Invaders Coop</h1>
-    <button onclick="selectMode('singleplayer')">Singleplayer</button>
-    <button onclick="selectMode('multiplayer')">Multiplayer</button>
-  </div>
+  <!-- Multiplayer Options for Offline/Local -->
   <div id="multiplayerOptions" style="display:none;">
     <h2>Multiplayer Options</h2>
     <button onclick="selectMultiplayer('online')">Online</button>
@@ -60,11 +91,9 @@
     <button id="fullscreenButton" onclick="toggleFullscreen()">Fullscreen (F)</button>
     <div id="shop">
       <h2>Shop</h2>
-      <!-- Normal powerups -->
       <div class="powerup" onclick="buyPowerup('speed')">Speed Boost (500 pts)</div>
       <div class="powerup" onclick="buyPowerup('shield')">Shield (250 pts)</div>
       <div class="powerup" onclick="buyPowerup('doubleShot')">Double Shot (1000 pts)</div>
-      <!-- New speedy powerups -->
       <div class="powerup" onclick="buyPowerup('speedyDouble')">Speedy Double Shot (100 pts)</div>
       <div class="powerup" onclick="buyPowerup('speedyTriple')">Speedy Triple Shot (300 pts)</div>
       <br>

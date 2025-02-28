@@ -18,8 +18,6 @@ app.get('/', (req, res) => {
 let lobbies = {};
 let lobbyCounter = 1;
 
-// Lobby object structure:
-// { id: 'lobby1', host: socket.id, players: [{ id, name }], private: boolean, password: string }
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
 

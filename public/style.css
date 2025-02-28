@@ -40,21 +40,36 @@ canvas {
 }
 
 /* Containers & Screens */
-#landing,
+#landingScreen,
 #multiplayerOptions,
 #waitingScreen,
 #gameContainer,
-#lobbyScreen {
+#lobbyScreen,
+#guideScreen {
   padding: 20px;
+}
+
+/* Landing Screen & Guide Styling */
+#landingScreen, #guideScreen {
+  margin: 50px auto;
+  max-width: 400px;
+  background: rgba(0,0,0,0.7);
+  border: 2px solid #0077cc;
+  border-radius: 10px;
+}
+
+#guideScreen p {
+  text-align: left;
+  margin: 10px 0;
 }
 
 /* Lobby Screen Styles */
 #lobbyScreen {
+  margin: 50px auto;
+  max-width: 400px;
   background: rgba(0,0,0,0.7);
   border: 2px solid #0077cc;
   border-radius: 10px;
-  margin: 20px auto;
-  max-width: 400px;
 }
 #lobbyScreen input, #lobbyScreen select {
   margin: 5px;
