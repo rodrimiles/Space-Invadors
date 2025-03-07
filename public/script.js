@@ -4,14 +4,12 @@ let gameMode; // Global game mode variable
 let currentLobbyId = null; // To store the lobby ID after creation
 
 // ----- Socket.IO Setup for Online Multiplayer -----
-let socket = null;
-if (typeof io !== 'undefined') {
-  socket = io();
-}
+const socket = io('https://space-invadors-woad.vercel.app/'); // Replace with your server URL
 
 // ----- Lobby & Leaderboard UI -----
 // Update lobby list on every change
-socket && socket.on("lobbyList", (lobbies) => {
+socket.on("lobbyList", (lobbies) => {
+  console.log('Lobby list updated:', lobbies);
   const lobbyList = document.getElementById("lobbyList");
   lobbyList.innerHTML = "";
   lobbies.forEach(lobby => {
@@ -23,7 +21,7 @@ socket && socket.on("lobbyList", (lobbies) => {
 });
 
 // Update leaderboard in the landing menu
-socket && socket.on("leaderboardUpdate", (leaderboard) => {
+socket.on("leaderboardUpdate", (leaderboard) => {
   const lbList = document.getElementById("leaderboardList");
   lbList.innerHTML = "";
   leaderboard.forEach(entry => {
@@ -47,7 +45,8 @@ function updateLobbyPlayersTable(lobby) {
 }
 
 // Socket event: lobby update
-socket && socket.on("lobbyUpdate", (lobby) => {
+socket.on("lobbyUpdate", (lobby) => {
+  console.log('Lobby updated:', lobby);
   updateLobbyPlayersTable(lobby);
   if (lobby.players.length === 2) {
     document.getElementById("waitingScreen").style.display = "none";
@@ -56,8 +55,9 @@ socket && socket.on("lobbyUpdate", (lobby) => {
 });
 
 // Socket event: lobby cancelled
-socket && socket.on("lobbyCancelled", (data) => {
-  alert(data.message);
+socket.on("lobbyCancelled", ({ message }) => {
+  console.error('Lobby cancelled:', message);
+  alert(message);
   backToLanding();
 });
 
@@ -65,20 +65,21 @@ socket && socket.on("lobbyCancelled", (data) => {
 function createLobby() {
   const createName = document.getElementById("createName").value;
   const lobbyName = document.getElementById("lobbyName").value;
-  const type = document.getElementById("lobbyType").value;
-  const password = document.getElementById("lobbyPassword").value;
+  const private = document.getElementById("private").checked;
+  const password = document.getElementById("password").value;
   if (!createName || !lobbyName) {
     alert("Enter both your username and a lobby name.");
     return;
   }
-  socket.emit("createLobby", { createName, lobbyName, private: type === "private", password });
+  socket.emit("createLobby", { createName, lobbyName, private, password });
 }
 
-socket && socket.on("lobbyCreated", (data) => {
-  currentLobbyId = data.lobbyId;
+socket.on("lobbyCreated", ({ lobbyId, lobby }) => {
+  console.log('Lobby created:', lobbyId, lobby);
+  currentLobbyId = lobbyId;
   document.getElementById("lobbyScreen").style.display = "none";
   document.getElementById("waitingScreen").style.display = "block";
-  updateLobbyPlayersTable(data.lobby);
+  updateLobbyPlayersTable(lobby);
 });
 
 function joinLobby() {
@@ -92,8 +93,14 @@ function joinLobby() {
   socket.emit("joinLobby", { lobbyId, joinName, password });
 }
 
-socket && socket.on("joinError", (data) => {
-  alert(data.message);
+socket.on('lobbyJoined', ({ lobbyId, lobby }) => {
+  console.log('Joined lobby:', lobbyId, lobby);
+  // Handle lobby join success (e.g., navigate to lobby screen)
+});
+
+socket.on("joinError", ({ message }) => {
+  console.error('Join error:', message);
+  alert(message);
 });
 
 // Cancel lobby creation
