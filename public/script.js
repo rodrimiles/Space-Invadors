@@ -402,30 +402,22 @@ const invaderPadding = 10;
 const invaderOffsetTop = 50;
 const invaderOffsetLeft = 50;
 function createInvaders() {
-  boss = null;
-  if ([5,10,15,20].includes(invaderLevel)) {
-    let bossHealth = 20 + (invaderLevel - 5) * 5;
-    boss = { x: canvas.width/2 - 100, y: 50, width: 200, height: 50, alive: true, health: bossHealth };
-    invaders = [];
-  } else {
-    invaders = [];
-    for (let i = 0; i < invaderCols; i++) {
-      invaders[i] = [];
-      let botHealth = 1 + Math.floor((invaderLevel - 1) / 3);
-      for (let j = 0; j < invaderRows; j++) {
-        invaders[i][j] = { 
-          x: i * (invaderWidth + invaderPadding) + invaderOffsetLeft, 
-          y: j * (invaderHeight + invaderPadding) + invaderOffsetTop, 
-          alive: true, 
-          health: botHealth 
-        };
-      }
+  invaders = [];
+  for (let i = 0; i < invaderCols; i++) {
+    invaders[i] = [];
+    let botHealth = 1 + Math.floor((invaderLevel - 1) / 3);
+    for (let j = 0; j < invaderRows; j++) {
+      invaders[i][j] = { 
+        x: i * (invaderWidth + invaderPadding) + invaderOffsetLeft, 
+        y: j * (invaderHeight + invaderPadding) + invaderOffsetTop, 
+        alive: true, 
+        health: botHealth 
+      };
     }
   }
   createBarriers();
   updateInfoDisplay();
 }
-createInvaders();
 
 function drawInvader(invader) {
   let gradient = ctx.createRadialGradient(
@@ -490,40 +482,31 @@ function drawBarriers() {
 }
 
 function updateInvaders() {
-  if (boss) {
-    boss.x += bossDirection * invaderSpeed;
-    if (boss.x < 0) { boss.x = 0; bossDirection = 1; }
-    else if (boss.x + boss.width > canvas.width) { boss.x = canvas.width - boss.width; bossDirection = -1; }
-    if (Math.random() < 0.005 * invaderLevel) {
-      invaderBullets.push({ x: boss.x + boss.width/2, y: boss.y + boss.height, speed: 4 });
+  let edgeReached = false;
+  for (let i = 0; i < invaderCols; i++) {
+    for (let j = 0; j < invaderRows; j++) {
+      if (invaders[i][j].alive) {
+        invaders[i][j].x += invaderDirection * invaderSpeed;
+        if (invaders[i][j].x + invaderWidth > canvas.width || invaders[i][j].x < 0) {
+          edgeReached = true;
+        }
+        if (Math.random() < 0.0015 * invaderLevel) {
+          invaderBullets.push({ x: invaders[i][j].x + invaderWidth / 2, y: invaders[i][j].y + invaderHeight, speed: 3 });
+        }
+      }
     }
-  } else {
-    let edgeReached = false;
+  }
+  if (edgeReached) {
+    invaderDirection *= -1;
     for (let i = 0; i < invaderCols; i++) {
       for (let j = 0; j < invaderRows; j++) {
-        if (invaders[i][j].alive) {
-          invaders[i][j].x += invaderDirection * invaderSpeed;
-          if (invaders[i][j].x + invaderWidth > canvas.width || invaders[i][j].x < 0) {
-            edgeReached = true;
-          }
-          if (Math.random() < 0.0015 * invaderLevel) {
-            invaderBullets.push({ x: invaders[i][j].x + invaderWidth/2, y: invaders[i][j].y + invaderHeight, speed: 3 });
-          }
-        }
+        invaders[i][j].y += invaderHeight * verticalDirection;
       }
     }
-    if (edgeReached) {
-      invaderDirection *= -1;
-      for (let i = 0; i < invaderCols; i++) {
-        for (let j = 0; j < invaderRows; j++) {
-          invaders[i][j].y += invaderHeight * verticalDirection;
-        }
-      }
-      verticalMoveCount++;
-      if (verticalMoveCount >= 2) {
-        verticalDirection *= -1;
-        verticalMoveCount = 0;
-      }
+    verticalMoveCount++;
+    if (verticalMoveCount >= 2) {
+      verticalDirection *= -1;
+      verticalMoveCount = 0;
     }
   }
 }
@@ -538,18 +521,6 @@ function updateBullets() {
     const bullet = bullets[i];
     bullet.y -= bullet.speed;
     if (checkBarrierCollision(bullet)) { bullets.splice(i, 1); continue; }
-    if (boss && boss.alive &&
-        bullet.x > boss.x && bullet.x < boss.x + boss.width &&
-        bullet.y > boss.y && bullet.y < boss.y + boss.height) {
-      boss.health -= 1;
-      if (boss.health <= 0) {
-        boss.alive = false;
-        teamScore += 100;
-        updateInfoDisplay();
-      }
-      bullets.splice(i, 1);
-      continue;
-    }
     for (let col = 0; col < invaderCols; col++) {
       for (let row = 0; row < invaderRows; row++) {
         const invader = invaders[col][row];
@@ -621,10 +592,8 @@ function checkAllEnemiesDefeated() {
 
 function nextLevel() {
   if (gameMode === "multiplayer_local" || gameMode === "multiplayer_online") {
-    if (player1.lives === 0) { player1.lives = 1; }
-    else if (player1.lives < 3) { player1.lives++; }
-    if (player2.lives === 0) { player2.lives = 1; }
-    else if (player2.lives < 3) { player2.lives++; }
+    if (player1.lives > 0 && player1.lives < 3) { player1.lives++; }
+    if (player2.lives > 0 && player2.lives < 3) { player2.lives++; }
   }
   invaderLevel++;
   invaderSpeed += 0.5;

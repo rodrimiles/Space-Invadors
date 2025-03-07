@@ -1,65 +1,38 @@
-// server.js
 const express = require('express');
-const app = express();
 const http = require('http');
-const server = http.createServer(app);
 const socketIo = require('socket.io');
+
+const app = express();
+const server = http.createServer(app);
 const io = socketIo(server);
 
-// Serve static files from the current directory
-app.use(express.static(__dirname));
-
-// Serve index.html at root
-app.get('/', (req, res) => {
-  res.sendFile(__dirname + '/index.html');
-});
-
-// In-memory storage for lobbies and leaderboard
-let lobbies = {};
-let lobbyCounter = 1;
-let leaderboard = []; // Array of { username, score }
-
-// Helper: update leaderboard with a new score
-function updateLeaderboard(username, score) {
-  leaderboard.push({ username, score });
-  // Sort descending by score
-  leaderboard.sort((a, b) => b.score - a.score);
-  // Keep only top 10 scores (for example)
-  leaderboard = leaderboard.slice(0, 10);
-}
+let lobbies = [];
 
 io.on('connection', (socket) => {
-  console.log('Client connected:', socket.id);
-  
-  // When a client connects, send the current lobby list and leaderboard
-  socket.emit('lobbyList', getPublicLobbies());
-  socket.emit('leaderboardUpdate', leaderboard);
+  console.log('New client connected');
 
-  socket.on('createLobby', (data) => {
-    // data: { createName, lobbyName, private, password }
-    let lobbyId = 'lobby' + lobbyCounter++;
-    lobbies[lobbyId] = {
+  socket.on('createLobby', ({ createName, lobbyName, private, password }) => {
+    const lobbyId = `${lobbyName}-${Date.now()}`;
+    const lobby = {
       id: lobbyId,
-      lobbyName: data.lobbyName,
-      host: socket.id,
-      players: [{ id: socket.id, name: data.createName }],
-      private: data.private,
-      password: data.password || ''
+      lobbyName,
+      private,
+      password,
+      players: [{ id: socket.id, name: createName }],
     };
+    lobbies.push(lobby);
     socket.join(lobbyId);
-    // Emit lobbyCreated event with lobby info.
-    socket.emit('lobbyCreated', { lobbyId, lobby: lobbies[lobbyId] });
-    io.emit('lobbyList', getPublicLobbies());
+    io.emit('lobbyList', lobbies);
+    socket.emit('lobbyCreated', { lobbyId, lobby });
   });
 
-  socket.on('joinLobby', (data) => {
-    // data: { lobbyId, joinName, password }
-    let lobby = lobbies[data.lobbyId];
+  socket.on('joinLobby', ({ lobbyId, joinName, password }) => {
+    const lobby = lobbies.find(l => l.id === lobbyId);
     if (!lobby) {
-      socket.emit('joinError', { message: 'Lobby does not exist' });
+      socket.emit('joinError', { message: 'Lobby not found' });
       return;
     }
-    if (lobby.private && lobby.password !== data.password) {
+    if (lobby.private && lobby.password !== password) {
       socket.emit('joinError', { message: 'Incorrect password' });
       return;
     }
@@ -67,61 +40,31 @@ io.on('connection', (socket) => {
       socket.emit('joinError', { message: 'Lobby is full' });
       return;
     }
-    lobby.players.push({ id: socket.id, name: data.joinName });
-    socket.join(data.lobbyId);
-    io.to(data.lobbyId).emit('lobbyUpdate', lobby);
-    io.emit('lobbyList', getPublicLobbies());
+    lobby.players.push({ id: socket.id, name: joinName });
+    socket.join(lobbyId);
+    io.emit('lobbyList', lobbies);
+    io.to(lobbyId).emit('lobbyUpdate', lobby);
+    socket.emit('lobbyJoined', { lobbyId, lobby });
   });
 
-  socket.on('cancelLobby', (data) => {
-    // data: { lobbyId }
-    let lobby = lobbies[data.lobbyId];
-    if (lobby && lobby.host === socket.id) {
-      io.to(data.lobbyId).emit('lobbyCancelled', { message: 'Lobby cancelled by host.' });
-      delete lobbies[data.lobbyId];
-      io.emit('lobbyList', getPublicLobbies());
-    }
-  });
-  
-  // Example: when a game finishes, the client sends a score update
-  socket.on('gameFinished', (data) => {
-    // data: { username, score }
-    updateLeaderboard(data.username, data.score);
-    io.emit('leaderboardUpdate', leaderboard);
+  socket.on('cancelLobby', ({ lobbyId }) => {
+    lobbies = lobbies.filter(l => l.id !== lobbyId);
+    io.emit('lobbyList', lobbies);
+    io.to(lobbyId).emit('lobbyCancelled', { message: 'Lobby has been cancelled' });
   });
 
   socket.on('disconnect', () => {
-    console.log('Client disconnected:', socket.id);
-    for (let lobbyId in lobbies) {
-      let lobby = lobbies[lobbyId];
-      lobby.players = lobby.players.filter(p => p.id !== socket.id);
-      if (lobby.players.length === 0) {
-        delete lobbies[lobbyId];
-      } else {
-        // If the host disconnects, cancel the lobby.
-        if (lobby.host === socket.id) {
-          io.to(lobbyId).emit('lobbyCancelled', { message: 'Lobby cancelled because host disconnected.' });
-          delete lobbies[lobbyId];
-        } else {
-          io.to(lobbyId).emit('lobbyUpdate', lobby);
-        }
-      }
-    }
-    io.emit('lobbyList', getPublicLobbies());
+    lobbies.forEach(lobby => {
+      lobby.players = lobby.players.filter(player => player.id !== socket.id);
+    });
+    lobbies = lobbies.filter(lobby => lobby.players.length > 0);
+    io.emit('lobbyList', lobbies);
+    console.log('Client disconnected');
   });
 });
 
-function getPublicLobbies() {
-  let list = [];
-  for (let lobbyId in lobbies) {
-    let lobby = lobbies[lobbyId];
-    // Return public lobbies that are not full.
-    if (!lobby.private && lobby.players.length < 2) {
-      list.push({ id: lobbyId, lobbyName: lobby.lobbyName, players: lobby.players });
-    }
-  }
-  return list;
-}
+app.use(express.static('public'));
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+server.listen(3000, () => {
+  console.log('Server is running on port 3000');
+});
