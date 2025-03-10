@@ -3,20 +3,45 @@
 let gameMode; // Global game mode variable
 let currentLobbyId = null; // To store the lobby ID after creation
 
-// ----- Socket.IO Setup for Online Multiplayer -----
-const socket = io('https://space-invadors-woad.vercel.app/'); // Replace with your server URL
+// Change the socket connection to use localhost
+const socket = io('http://localhost:3000', {
+  transports: ['websocket', 'polling'],
+});
+
+// Add more detailed logging
+socket.on('connect', () => {
+  console.log('Connected to server with ID:', socket.id);
+});
+
+socket.on('connect_error', (error) => {
+  console.error('Connection failed:', error);
+});
 
 // ----- Lobby & Leaderboard UI -----
 // Update lobby list on every change
 socket.on("lobbyList", (lobbies) => {
   console.log('Lobby list updated:', lobbies);
+  
+  // Update the list view
   const lobbyList = document.getElementById("lobbyList");
   lobbyList.innerHTML = "";
+  
+  // Update the dropdown
+  const lobbySelect = document.getElementById("lobbySelect");
+  lobbySelect.innerHTML = "<option value=''>Select a lobby...</option>";
+  
   lobbies.forEach(lobby => {
+    // Create list item
     const li = document.createElement("li");
     li.innerText = `${lobby.lobbyName} (${lobby.id}) - (${lobby.players.length}/2)`;
     li.onclick = () => { document.getElementById("lobbySelect").value = lobby.id; };
     lobbyList.appendChild(li);
+    
+    // Create dropdown option
+    const option = document.createElement("option");
+    option.value = lobby.id;
+    option.text = `${lobby.lobbyName} (${lobby.players.length}/2)`;
+    lobbySelect.appendChild(option);
   });
 });
 
@@ -65,12 +90,15 @@ socket.on("lobbyCancelled", ({ message }) => {
 function createLobby() {
   const createName = document.getElementById("createName").value;
   const lobbyName = document.getElementById("lobbyName").value;
-  const private = document.getElementById("private").checked;
-  const password = document.getElementById("password").value;
+  const private = document.getElementById("lobbyType").value === "private";
+  const password = document.getElementById("lobbyPassword").value;
+
   if (!createName || !lobbyName) {
-    alert("Enter both your username and a lobby name.");
+    alert("Please enter both your username and a lobby name.");
     return;
   }
+
+  console.log('Attempting to create lobby...', { createName, lobbyName, private, password });
   socket.emit("createLobby", { createName, lobbyName, private, password });
 }
 
@@ -95,7 +123,21 @@ function joinLobby() {
 
 socket.on('lobbyJoined', ({ lobbyId, lobby }) => {
   console.log('Joined lobby:', lobbyId, lobby);
-  // Handle lobby join success (e.g., navigate to lobby screen)
+  currentLobbyId = lobbyId;
+  document.getElementById("lobbyScreen").style.display = "none";
+  document.getElementById("waitingScreen").style.display = "block";
+  updateLobbyPlayersTable(lobby);
+  
+  // Set player IDs based on join order
+  if (lobby.players.length === 2) {
+    if (socket.id === lobby.players[0].id) {
+      player1.id = lobby.players[0].id;
+      player2.id = lobby.players[1].id;
+    } else {
+      player1.id = lobby.players[1].id;
+      player2.id = lobby.players[0].id;
+    }
+  }
 });
 
 socket.on("joinError", ({ message }) => {
@@ -398,6 +440,15 @@ function shoot(player) {
       bullets.push({ x: player.x + player.width/2, y: player.y, speed: 7 });
     }
   }
+  
+  if (gameMode === "multiplayer_online") {
+    const bulletData = { x: player.x + player.width/2, y: player.y, speed: 7 };
+    socket.emit('playerShoot', {
+      lobbyId: currentLobbyId,
+      playerId: player.id,
+      bulletData
+    });
+  }
 }
 
 let invaders = [];
@@ -649,22 +700,58 @@ function leaveGame() {
 
 // Ensure the player's lives do not go below 0
 function handlePlayerMovement() {
-  if (gameMode === "singleplayer") {
-    if (player1.lives > 0) {
-      if (keysP1["KeyA"]) { player1.x -= player1.speed; if (player1.x < 0) player1.x = 0; }
-      if (keysP1["KeyD"]) { player1.x += player1.speed; if (player1.x + player1.width > canvas.width) player1.x = canvas.width - player1.width; }
-      if (keysP1["Space"]) { shoot(player1); keysP1["Space"] = false; }
+  if (gameMode === "multiplayer_online") {
+    if (socket.id === player1.id) {
+      // First player controls white ship
+      if (keysP1["KeyA"]) {
+        player1.x -= player1.speed;
+        if (player1.x < 0) player1.x = 0;
+        socket.emit('playerMove', { lobbyId: currentLobbyId, playerId: player1.id, x: player1.x });
+      }
+      if (keysP1["KeyD"]) {
+        player1.x += player1.speed;
+        if (player1.x + player1.width > canvas.width) player1.x = canvas.width - player1.width;
+        socket.emit('playerMove', { lobbyId: currentLobbyId, playerId: player1.id, x: player1.x });
+      }
+      if (keysP1["Space"]) {
+        shoot(player1);
+        keysP1["Space"] = false;
+      }
+    } else if (socket.id === player2.id) {
+      // Second player controls cyan ship
+      if (keysP1["KeyA"]) {
+        player2.x -= player2.speed;
+        if (player2.x < 0) player2.x = 0;
+        socket.emit('playerMove', { lobbyId: currentLobbyId, playerId: player2.id, x: player2.x });
+      }
+      if (keysP1["KeyD"]) {
+        player2.x += player2.speed;
+        if (player2.x + player2.width > canvas.width) player2.x = canvas.width - player2.width;
+        socket.emit('playerMove', { lobbyId: currentLobbyId, playerId: player2.id, x: player2.x });
+      }
+      if (keysP1["Space"]) {
+        shoot(player2);
+        keysP1["Space"] = false;
+      }
     }
   } else {
-    if (player1.lives > 0) {
-      if (keysP1["KeyA"]) { player1.x -= player1.speed; if (player1.x < 0) player1.x = 0; }
-      if (keysP1["KeyD"]) { player1.x += player1.speed; if (player1.x + player1.width > canvas.width) player1.x = canvas.width - player1.width; }
-      if (keysP1["Space"]) { shoot(player1); keysP1["Space"] = false; }
-    }
-    if (player2.lives > 0) {
-      if (keysP2["ArrowLeft"]) { player2.x -= player2.speed; if (player2.x < 0) player2.x = 0; }
-      if (keysP2["ArrowRight"]) { player2.x += player2.speed; if (player2.x + player2.width > canvas.width) player2.x = canvas.width - player2.width; }
-      if (keysP2["Enter"] || keysP2["NumpadEnter"]) { shoot(player2); keysP2["Enter"] = keysP2["NumpadEnter"] = false; }
+    if (gameMode === "singleplayer") {
+      if (player1.lives > 0) {
+        if (keysP1["KeyA"]) { player1.x -= player1.speed; if (player1.x < 0) player1.x = 0; }
+        if (keysP1["KeyD"]) { player1.x += player1.speed; if (player1.x + player1.width > canvas.width) player1.x = canvas.width - player1.width; }
+        if (keysP1["Space"]) { shoot(player1); keysP1["Space"] = false; }
+      }
+    } else {
+      if (player1.lives > 0) {
+        if (keysP1["KeyA"]) { player1.x -= player1.speed; if (player1.x < 0) player1.x = 0; }
+        if (keysP1["KeyD"]) { player1.x += player1.speed; if (player1.x + player1.width > canvas.width) player1.x = canvas.width - player1.width; }
+        if (keysP1["Space"]) { shoot(player1); keysP1["Space"] = false; }
+      }
+      if (player2.lives > 0) {
+        if (keysP2["ArrowLeft"]) { player2.x -= player2.speed; if (player2.x < 0) player2.x = 0; }
+        if (keysP2["ArrowRight"]) { player2.x += player2.speed; if (player2.x + player2.width > canvas.width) player2.x = canvas.width - player2.width; }
+        if (keysP2["Enter"] || keysP2["NumpadEnter"]) { shoot(player2); keysP2["Enter"] = keysP2["NumpadEnter"] = false; }
+      }
     }
   }
 }
@@ -726,12 +813,43 @@ function draw() {
     return;
   }
   
+  if (gameMode === "multiplayer_online") {
+    syncGameState();
+  }
+  
   animationFrameId = requestAnimationFrame(draw);
 }
 
 function initGame() {
   if (gameMode === "singleplayer") {
     player1 = { x: canvas.width/2 - 20, y: canvas.height - 50, width: 40, height: 20, speed: 5, lives: 3, shieldActive: false, shieldCooldown: false, lastShotTime: 0, name: document.getElementById("createName").value || "Player1" };
+  } else if (gameMode === "multiplayer_online") {
+    player1 = {
+      id: socket.id,
+      x: canvas.width/2 - 100,
+      y: canvas.height - 50,
+      width: 40,
+      height: 20,
+      speed: 5,
+      lives: 3,
+      shieldActive: false,
+      shieldCooldown: false,
+      lastShotTime: 0,
+      name: document.getElementById("createName").value || "Player1"
+    };
+    player2 = {
+      id: null, // Will be set when second player joins
+      x: canvas.width/2 + 60,
+      y: canvas.height - 50,
+      width: 40,
+      height: 20,
+      speed: 5,
+      lives: 3,
+      shieldActive: false,
+      shieldCooldown: false,
+      lastShotTime: 0,
+      name: document.getElementById("joinName").value || "Player2"
+    };
   } else {
     player1 = { x: canvas.width/2 - 100, y: canvas.height - 50, width: 40, height: 20, speed: 5, lives: 3, shieldActive: false, shieldCooldown: false, lastShotTime: 0, name: document.getElementById("createName").value || "Player1" };
     player2 = { x: canvas.width/2 + 60, y: canvas.height - 50, width: 40, height: 20, speed: 5, lives: 3, shieldActive: false, shieldCooldown: false, lastShotTime: 0, name: document.getElementById("joinName").value || "Player2" };
@@ -749,3 +867,46 @@ function initGame() {
   updateInfoDisplay();
   draw();
 }
+
+// Add game state sync functions
+function syncGameState() {
+  if (gameMode === "multiplayer_online" && currentLobbyId) {
+    socket.emit('gameState', {
+      lobbyId: currentLobbyId,
+      state: {
+        invaders,
+        teamScore,
+        invaderLevel,
+        invaderSpeed,
+        barriers
+      }
+    });
+  }
+}
+
+socket.on('gameStateUpdate', (state) => {
+  if (gameMode === "multiplayer_online") {
+    invaders = state.invaders;
+    teamScore = state.teamScore;
+    invaderLevel = state.invaderLevel;
+    invaderSpeed = state.invaderSpeed;
+    barriers = state.barriers;
+    updateInfoDisplay();
+  }
+});
+
+socket.on('playerMoved', ({ playerId, x }) => {
+  if (gameMode === "multiplayer_online") {
+    if (playerId === player1.id) {
+      player1.x = x;
+    } else if (playerId === player2.id) {
+      player2.x = x;
+    }
+  }
+});
+
+socket.on('playerShot', ({ playerId, bulletData }) => {
+  if (gameMode === "multiplayer_online") {
+    bullets.push(bulletData);
+  }
+});

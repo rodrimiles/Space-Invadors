@@ -1,29 +1,46 @@
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
+const cors = require('cors');
 
 const app = express();
+app.use(cors());
+
 const server = http.createServer(app);
-const io = socketIo(server);
+const io = socketIo(server, {
+  cors: {
+    origin: ["http://localhost:3000", "http://localhost:5500", "http://127.0.0.1:5500"],
+    methods: ["GET", "POST"]
+  }
+});
 
 let lobbies = [];
 
 io.on('connection', (socket) => {
-  console.log('New client connected');
+  console.log('New client connected with ID:', socket.id);
 
-  socket.on('createLobby', ({ createName, lobbyName, private, password }) => {
-    const lobbyId = `${lobbyName}-${Date.now()}`;
-    const lobby = {
-      id: lobbyId,
-      lobbyName,
-      private,
-      password,
-      players: [{ id: socket.id, name: createName }],
-    };
-    lobbies.push(lobby);
-    socket.join(lobbyId);
-    io.emit('lobbyList', lobbies);
-    socket.emit('lobbyCreated', { lobbyId, lobby });
+  socket.on('createLobby', (data) => {
+    console.log('Create lobby request received:', data);
+    try {
+      const { createName, lobbyName, private, password } = data;
+      const lobbyId = `${lobbyName}-${Date.now()}`;
+      const lobby = {
+        id: lobbyId,
+        lobbyName,
+        private,
+        password,
+        players: [{ id: socket.id, name: createName }],
+      };
+      lobbies.push(lobby);
+      console.log('Lobby created:', lobby);
+      
+      socket.join(lobbyId);
+      io.emit('lobbyList', lobbies.filter(l => !l.private));
+      socket.emit('lobbyCreated', { lobbyId, lobby });
+    } catch (error) {
+      console.error('Error creating lobby:', error);
+      socket.emit('error', { message: 'Failed to create lobby' });
+    }
   });
 
   socket.on('joinLobby', ({ lobbyId, joinName, password }) => {
@@ -53,7 +70,21 @@ io.on('connection', (socket) => {
     io.to(lobbyId).emit('lobbyCancelled', { message: 'Lobby has been cancelled' });
   });
 
+  // Add new event handlers for game synchronization
+  socket.on('gameState', ({ lobbyId, state }) => {
+    socket.to(lobbyId).emit('gameStateUpdate', state);
+  });
+
+  socket.on('playerMove', ({ lobbyId, playerId, x }) => {
+    socket.to(lobbyId).emit('playerMoved', { playerId, x });
+  });
+
+  socket.on('playerShoot', ({ lobbyId, playerId, bulletData }) => {
+    socket.to(lobbyId).emit('playerShot', { playerId, bulletData });
+  });
+
   socket.on('disconnect', () => {
+    console.log('Client disconnected:', socket.id);
     lobbies.forEach(lobby => {
       lobby.players = lobby.players.filter(player => player.id !== socket.id);
     });
@@ -63,8 +94,15 @@ io.on('connection', (socket) => {
   });
 });
 
+// Serve static files from public directory
 app.use(express.static('public'));
 
-server.listen(3000, () => {
-  console.log('Server is running on port 3000');
+// Add error handling
+server.on('error', (error) => {
+  console.error('Server error:', error);
+});
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
 });
