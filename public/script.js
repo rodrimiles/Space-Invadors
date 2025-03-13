@@ -45,17 +45,6 @@ socket.on("lobbyList", (lobbies) => {
   });
 });
 
-// Update leaderboard in the landing menu
-socket.on("leaderboardUpdate", (leaderboard) => {
-  const lbList = document.getElementById("leaderboardList");
-  lbList.innerHTML = "";
-  leaderboard.forEach(entry => {
-    const li = document.createElement("li");
-    li.innerText = `${entry.username}: ${entry.score}`;
-    lbList.appendChild(li);
-  });
-});
-
 // --- Helper Function: Update Waiting Room Table ---
 function updateLobbyPlayersTable(lobby) {
   const tableBody = document.getElementById("lobbyPlayersBody");
@@ -90,59 +79,62 @@ socket.on("lobbyCancelled", ({ message }) => {
 function createLobby() {
   const createName = document.getElementById("createName").value;
   const lobbyName = document.getElementById("lobbyName").value;
-  const private = document.getElementById("lobbyType").value === "private";
-  const password = document.getElementById("lobbyPassword").value;
 
   if (!createName || !lobbyName) {
     alert("Please enter both your username and a lobby name.");
     return;
   }
 
-  console.log('Attempting to create lobby...', { createName, lobbyName, private, password });
-  socket.emit("createLobby", { createName, lobbyName, private, password });
+  socket.emit("createLobby", { createName, lobbyName });
 }
 
+function joinLobby() {
+  const joinName = document.getElementById("joinName").value;
+  const lobbyId = document.getElementById("lobbySelect").value;
+  
+  if (!joinName) {
+    alert("Enter your username.");
+    return;
+  }
+  socket.emit("joinLobby", { lobbyId, joinName });
+}
+
+// Update socket event handlers
 socket.on("lobbyCreated", ({ lobbyId, lobby }) => {
   console.log('Lobby created:', lobbyId, lobby);
   currentLobbyId = lobbyId;
   document.getElementById("lobbyScreen").style.display = "none";
   document.getElementById("waitingScreen").style.display = "block";
+  // Only show start button to host (first player)
+  document.getElementById("hostStartButton").style.display = socket.id === lobby.players[0].id ? "block" : "none";
   updateLobbyPlayersTable(lobby);
 });
 
-function joinLobby() {
-  const joinName = document.getElementById("joinName").value;
-  const lobbyId = document.getElementById("lobbySelect").value;
-  const password = document.getElementById("joinPassword").value;
-  if (!joinName) {
-    alert("Enter your username.");
-    return;
-  }
-  socket.emit("joinLobby", { lobbyId, joinName, password });
-}
-
-socket.on('lobbyJoined', ({ lobbyId, lobby }) => {
-  console.log('Joined lobby:', lobbyId, lobby);
-  currentLobbyId = lobbyId;
-  document.getElementById("lobbyScreen").style.display = "none";
-  document.getElementById("waitingScreen").style.display = "block";
+socket.on("lobbyUpdate", (lobby) => {
+  console.log('Lobby updated:', lobby);
   updateLobbyPlayersTable(lobby);
   
-  // Set player IDs based on join order
+  // Only auto-start if 2 players
   if (lobby.players.length === 2) {
-    if (socket.id === lobby.players[0].id) {
-      player1.id = lobby.players[0].id;
-      player2.id = lobby.players[1].id;
-    } else {
-      player1.id = lobby.players[1].id;
-      player2.id = lobby.players[0].id;
-    }
+    document.getElementById("hostStartButton").style.display = "none";
+    startGame();
   }
 });
 
-socket.on("joinError", ({ message }) => {
-  console.error('Join error:', message);
+// Add host start game function
+function hostStartGame() {
+  if (currentLobbyId) {
+    socket.emit("hostStartGame", { lobbyId: currentLobbyId });
+  }
+}
+
+socket.on("gameStartError", (message) => {
   alert(message);
+});
+
+socket.on("forceGameStart", () => {
+  document.getElementById("waitingScreen").style.display = "none";
+  startGame();
 });
 
 // Cancel lobby creation
@@ -345,27 +337,6 @@ function toggleFullscreen() {
   } else {
     document.exitFullscreen();
   }
-}
-
-function toggleScoreboard() {
-  const scoreboard = document.getElementById("scoreboard");
-  if (scoreboard.style.display === "none" || scoreboard.style.display === "") {
-    updateScoreboard();
-    scoreboard.style.display = "block";
-  } else {
-    scoreboard.style.display = "none";
-  }
-}
-
-function updateScoreboard() {
-  let content = `<p>Team Score: ${teamScore}</p>`;
-  if (gameMode === "multiplayer_local" || gameMode === "multiplayer_online") {
-    content += `<p>Player 1 Lives: ${player1.lives}</p>`;
-    content += `<p>Player 2 Lives: ${player2.lives}</p>`;
-  } else {
-    content += `<p>Lives: ${player1.lives}</p>`;
-  }
-  document.getElementById("scoreboardContent").innerHTML = content;
 }
 
 const keysP1 = {};
@@ -663,11 +634,6 @@ function gameOver() {
   document.getElementById('gameOverPopup').style.display = 'block';
   document.getElementById('finalScore').innerText = `Your Score: ${teamScore}`;
   cancelAnimationFrame(animationFrameId);
-  // For online games, send the score so it appears in the leaderboard
-  if (gameMode === "multiplayer_online") {
-    let username = player1.name || "Anonymous";
-    socket.emit("gameFinished", { username, score: teamScore });
-  }
 }
 
 function playAgain() {
@@ -871,6 +837,28 @@ function initGame() {
 // Add game state sync functions
 function syncGameState() {
   if (gameMode === "multiplayer_online" && currentLobbyId) {
+    // Sync bullets
+    socket.emit('bulletSync', {
+      lobbyId: currentLobbyId,
+      bullets,
+      invaderBullets
+    });
+
+    // Sync enemies
+    socket.emit('enemySync', {
+      lobbyId: currentLobbyId,
+      invaders,
+      boss
+    });
+
+    // Sync score and level
+    socket.emit('scoreSync', {
+      lobbyId: currentLobbyId,
+      teamScore,
+      invaderLevel
+    });
+
+    // Original game state sync
     socket.emit('gameState', {
       lobbyId: currentLobbyId,
       state: {
@@ -883,6 +871,29 @@ function syncGameState() {
     });
   }
 }
+
+// Update the socket event handlers for game state sync
+socket.on('bulletUpdate', ({ bullets: newBullets, invaderBullets: newInvaderBullets }) => {
+  if (gameMode === "multiplayer_online") {
+    bullets = newBullets;
+    invaderBullets = newInvaderBullets;
+  }
+});
+
+socket.on('enemyUpdate', ({ invaders: newInvaders, boss: newBoss }) => {
+  if (gameMode === "multiplayer_online") {
+    invaders = newInvaders;
+    boss = newBoss;
+  }
+});
+
+socket.on('scoreUpdate', ({ teamScore: newScore, invaderLevel: newLevel }) => {
+  if (gameMode === "multiplayer_online") {
+    teamScore = newScore;
+    invaderLevel = newLevel;
+    updateInfoDisplay();
+  }
+});
 
 socket.on('gameStateUpdate', (state) => {
   if (gameMode === "multiplayer_online") {

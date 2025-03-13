@@ -14,11 +14,6 @@
     <button onclick="selectMode('singleplayer')">Singleplayer</button>
     <button onclick="selectMode('multiplayer')">Multiplayer</button>
     <button onclick="showGuide()">How to Play</button>
-    <!-- Leaderboard displayed on the landing screen -->
-    <div id="leaderboardMenu">
-      <h2>Leaderboard</h2>
-      <ol id="leaderboardList"></ol>
-    </div>
   </div>
 
   <!-- Guide Screen (Original version) -->
@@ -61,11 +56,6 @@
       <h2>Create Lobby</h2>
       <input type="text" id="createName" placeholder="Your Username">
       <input type="text" id="lobbyName" placeholder="Lobby Name">
-      <select id="lobbyType">
-        <option value="public">Public</option>
-        <option value="private">Private</option>
-      </select>
-      <input type="text" id="lobbyPassword" placeholder="Password (if private)">
       <button onclick="createLobby()">Create Lobby</button>
       <button onclick="cancelCreateLobby()">Cancel</button>
     </div>
@@ -73,12 +63,11 @@
       <h2>Join Lobby</h2>
       <input type="text" id="joinName" placeholder="Your Username">
       <select id="lobbySelect"></select>
-      <input type="text" id="joinPassword" placeholder="Password (if required)">
       <button onclick="joinLobby()">Enter Lobby</button>
       <button onclick="cancelJoinLobby()">Cancel</button>
     </div>
     <div id="lobbyListDiv">
-      <h2>Available Lobbies (Public)</h2>
+      <h2>Available Lobbies</h2>
       <ul id="lobbyList"></ul>
     </div>
     <button onclick="backToLanding()">Back</button>
@@ -86,7 +75,7 @@
 
   <!-- Waiting Room Screen -->
   <div id="waitingScreen" style="display:none;">
-    <h2>Waiting for other player...</h2>
+    <h2>Waiting Room</h2>
     <table id="lobbyPlayersTable">
       <thead>
         <tr>
@@ -95,6 +84,7 @@
       </thead>
       <tbody id="lobbyPlayersBody"></tbody>
     </table>
+    <button id="hostStartButton" style="display:none;" onclick="hostStartGame()">Start Game</button>
     <button onclick="cancelWaiting()">Cancel</button>
   </div>
 
@@ -103,7 +93,6 @@
     <canvas id="gameCanvas" width="800" height="600"></canvas>
     <button id="shopButton" onclick="toggleShop()">Shop (S)</button>
     <button id="fullscreenButton" onclick="toggleFullscreen()">Fullscreen (F)</button>
-    <button id="scoreboardButton" onclick="toggleScoreboard()">Scoreboard</button>
     <div id="shop">
       <h2>Shop</h2>
       <div class="powerup" onclick="buyPowerup('speed')">Speed Boost (500 pts)</div>
@@ -113,11 +102,6 @@
       <div class="powerup" onclick="buyPowerup('speedyTriple')">Speedy Triple Shot (300 pts)</div>
       <br>
       <button onclick="toggleShop()">Close</button>
-    </div>
-    <div id="scoreboard" style="display:none;">
-      <h2>Scoreboard</h2>
-      <div id="scoreboardContent"></div>
-      <button onclick="toggleScoreboard()">Close</button>
     </div>
     <div id="info">
       <span id="lives">Lives: </span>

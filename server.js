@@ -108,6 +108,39 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Add host start game handler
+  socket.on('hostStartGame', ({ lobbyId }) => {
+    const lobby = lobbies.find(l => l.id === lobbyId);
+    if (!lobby) {
+      socket.emit('gameStartError', 'Lobby not found');
+      return;
+    }
+    if (lobby.players[0].id !== socket.id) {
+      socket.emit('gameStartError', 'Only host can start the game');
+      return;
+    }
+    if (lobby.players.length < 1) {
+      socket.emit('gameStartError', 'Need at least one player to start');
+      return;
+    }
+    io.to(lobbyId).emit('forceGameStart');
+  });
+
+  // Add bullet sync
+  socket.on('bulletSync', ({ lobbyId, bullets, invaderBullets }) => {
+    socket.to(lobbyId).emit('bulletUpdate', { bullets, invaderBullets });
+  });
+
+  // Add enemy sync
+  socket.on('enemySync', ({ lobbyId, invaders, boss }) => {
+    socket.to(lobbyId).emit('enemyUpdate', { invaders, boss });
+  });
+
+  // Add score sync
+  socket.on('scoreSync', ({ lobbyId, teamScore, invaderLevel }) => {
+    socket.to(lobbyId).emit('scoreUpdate', { teamScore, invaderLevel });
+  });
+
   socket.on('disconnect', () => {
     console.log('Client disconnected:', socket.id);
     lobbies.forEach(lobby => {
