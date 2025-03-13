@@ -15,6 +15,7 @@ const io = socketIo(server, {
 });
 
 let lobbies = [];
+let gameStates = {}; // Store game states for each lobby
 
 io.on('connection', (socket) => {
   console.log('New client connected with ID:', socket.id);
@@ -70,23 +71,54 @@ io.on('connection', (socket) => {
     io.to(lobbyId).emit('lobbyCancelled', { message: 'Lobby has been cancelled' });
   });
 
-  // Add new event handlers for game synchronization
+  // Enhanced game state synchronization
   socket.on('gameState', ({ lobbyId, state }) => {
+    gameStates[lobbyId] = state;
     socket.to(lobbyId).emit('gameStateUpdate', state);
   });
 
-  socket.on('playerMove', ({ lobbyId, playerId, x }) => {
-    socket.to(lobbyId).emit('playerMoved', { playerId, x });
+  socket.on('playerMove', ({ lobbyId, playerId, x, y }) => {
+    if (gameStates[lobbyId]) {
+      gameStates[lobbyId].players = gameStates[lobbyId].players || {};
+      gameStates[lobbyId].players[playerId] = { x, y };
+    }
+    socket.to(lobbyId).emit('playerMoved', { playerId, x, y });
   });
 
   socket.on('playerShoot', ({ lobbyId, playerId, bulletData }) => {
     socket.to(lobbyId).emit('playerShot', { playerId, bulletData });
   });
 
+  socket.on('playerStatus', ({ lobbyId, playerId, isAlive }) => {
+    if (gameStates[lobbyId]) {
+      gameStates[lobbyId].playerStatus = gameStates[lobbyId].playerStatus || {};
+      gameStates[lobbyId].playerStatus[playerId] = isAlive;
+      io.to(lobbyId).emit('playerStatusUpdate', { playerId, isAlive });
+    }
+  });
+
+  socket.on('gameReset', ({ lobbyId }) => {
+    delete gameStates[lobbyId];
+    io.to(lobbyId).emit('forceGameReset');
+  });
+
+  socket.on('requestGameState', ({ lobbyId }) => {
+    if (gameStates[lobbyId]) {
+      socket.emit('fullGameState', gameStates[lobbyId]);
+    }
+  });
+
   socket.on('disconnect', () => {
     console.log('Client disconnected:', socket.id);
     lobbies.forEach(lobby => {
+      if (gameStates[lobby.id]) {
+        delete gameStates[lobby.id].players?.[socket.id];
+        delete gameStates[lobby.id].playerStatus?.[socket.id];
+      }
       lobby.players = lobby.players.filter(player => player.id !== socket.id);
+      if (lobby.players.length === 0) {
+        delete gameStates[lobby.id];
+      }
     });
     lobbies = lobbies.filter(lobby => lobby.players.length > 0);
     io.emit('lobbyList', lobbies);
