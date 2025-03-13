@@ -62,10 +62,9 @@ function updateLobbyPlayersTable(lobby) {
 socket.on("lobbyUpdate", (lobby) => {
   console.log('Lobby updated:', lobby);
   updateLobbyPlayersTable(lobby);
-  if (lobby.players.length === 2) {
-    document.getElementById("waitingScreen").style.display = "none";
-    startGame();
-  }
+  // Remove auto-start logic
+  document.getElementById("hostStartButton").style.display = 
+    socket.id === lobby.players[0].id ? "block" : "none";
 });
 
 // Socket event: lobby cancelled
@@ -199,13 +198,19 @@ function backToLandingLobby() {
   backToLanding();
 }
 
+// Update startGame function to ensure shop is closed
 function startGame() {
+  const shop = document.getElementById('shop');
+  shop.style.display = 'none';
+  gamePaused = false;
+  
   document.getElementById("lobbyScreen").style.display = "none";
   document.getElementById("multiplayerOptions").style.display = "none";
   document.getElementById("waitingScreen").style.display = "none";
   document.getElementById("landingScreen").style.display = "none";
   document.getElementById("guideScreen").style.display = "none";
   document.getElementById("gameContainer").style.display = "block";
+  
   initGame();
 }
 
@@ -318,16 +323,17 @@ function activateShield() {
   }, 10000);
 }
 
+// Update toggleShop function to prevent opening during game start
 function toggleShop() {
   const shop = document.getElementById('shop');
-  if (shop.style.display === 'none' || shop.style.display === '') {
-    shop.style.display = 'block';
-    gamePaused = true;
-    cancelAnimationFrame(animationFrameId);
-  } else {
+  if (shop.style.display === 'block') {
     shop.style.display = 'none';
     gamePaused = false;
     draw();
+  } else if (!gamePaused) { // Only allow opening if game isn't paused
+    shop.style.display = 'block';
+    gamePaused = true;
+    cancelAnimationFrame(animationFrameId);
   }
 }
 
@@ -632,20 +638,68 @@ function nextLevel() {
 
 function gameOver() {
   document.getElementById('gameOverPopup').style.display = 'block';
-  document.getElementById('finalScore').innerText = `Your Score: ${teamScore}`;
+  document.getElementById('finalScore').innerText = `Team Score: ${teamScore}`;
+  
+  if (gameMode === "multiplayer_online") {
+    document.getElementById('gameOverPopup').innerHTML = `
+      <h2>Game Over</h2>
+      <p id="finalScore">Team Score: ${teamScore}</p>
+      <div id="voteStatus">Waiting for votes...</div>
+      <button onclick="votePlayAgain('yes')">Vote to Play Again</button>
+      <button onclick="votePlayAgain('no')">Vote to Leave</button>
+      <button onclick="leaveGame()">Leave Immediately</button>
+    `;
+  }
+  
   cancelAnimationFrame(animationFrameId);
 }
 
-function playAgain() {
-  document.getElementById('gameOverPopup').style.display = 'none';
-  if (gameMode === "singleplayer") {
-    player1.lives = 3;
-    player1.x = canvas.width/2 - 20;
-  } else {
-    player1.lives = player2.lives = 3;
-    player1.x = canvas.width/2 - 100;
-    player2.x = canvas.width/2 + 60;
+// Update vote play again function
+function votePlayAgain(vote) {
+  if (currentLobbyId) {
+    socket.emit('playAgainVote', { 
+      lobbyId: currentLobbyId, 
+      vote,
+      playerId: socket.id 
+    });
+    
+    // Disable vote buttons after voting
+    document.querySelectorAll('#gameOverPopup button').forEach(btn => {
+      if (btn.onclick.toString().includes('votePlayAgain')) {
+        btn.disabled = true;
+      }
+    });
+    document.getElementById('voteStatus').innerText = 'Vote submitted. Waiting for other player...';
   }
+}
+
+// Add vote update handler
+socket.on('voteUpdate', ({ votes, needed }) => {
+  if (document.getElementById('voteStatus')) {
+    document.getElementById('voteStatus').innerText = 
+      `Votes to restart: ${votes} / ${needed}`;
+  }
+});
+
+// Update play again result handler
+socket.on('playAgainResult', ({ restart, message }) => {
+  if (restart) {
+    // Reset game state
+    resetGameState();
+    // Start new game
+    startGame();
+  } else {
+    alert(message || "Game ended - returning to lobby");
+    backToLanding();
+  }
+});
+
+// Add new reset game state function
+function resetGameState() {
+  player1.lives = 3;
+  player2.lives = 3;
+  player1.x = canvas.width/2 - 100;
+  player2.x = canvas.width/2 + 60;
   teamScore = 0;
   invaderLevel = 1;
   invaderSpeed = 2;
@@ -657,11 +711,6 @@ function playAgain() {
   createInvaders();
   createBarriers();
   updateInfoDisplay();
-  draw();
-}
-
-function leaveGame() {
-  window.location.href = "about:blank";
 }
 
 // Ensure the player's lives do not go below 0
@@ -837,40 +886,74 @@ function initGame() {
 // Add game state sync functions
 function syncGameState() {
   if (gameMode === "multiplayer_online" && currentLobbyId) {
-    // Sync bullets
-    socket.emit('bulletSync', {
+    socket.emit('fullGameSync', {
       lobbyId: currentLobbyId,
-      bullets,
-      invaderBullets
-    });
-
-    // Sync enemies
-    socket.emit('enemySync', {
-      lobbyId: currentLobbyId,
-      invaders,
-      boss
-    });
-
-    // Sync score and level
-    socket.emit('scoreSync', {
-      lobbyId: currentLobbyId,
-      teamScore,
-      invaderLevel
-    });
-
-    // Original game state sync
-    socket.emit('gameState', {
-      lobbyId: currentLobbyId,
-      state: {
+      gameState: {
+        player1: {
+          x: player1.x,
+          y: player1.y,
+          lives: player1.lives,
+          shieldActive: player1.shieldActive
+        },
+        player2: {
+          x: player2.x,
+          y: player2.y,
+          lives: player2.lives,
+          shieldActive: player2.shieldActive
+        },
+        bullets,
+        invaderBullets,
         invaders,
+        boss,
+        barriers,
         teamScore,
         invaderLevel,
         invaderSpeed,
-        barriers
+        gamePaused
       }
     });
   }
 }
+
+// Add new event listener for full game sync
+socket.on('gameStateSync', (gameState) => {
+  if (gameMode === "multiplayer_online") {
+    // Update player positions and states
+    if (socket.id === player1.id) {
+      player2.x = gameState.player2.x;
+      player2.y = gameState.player2.y;
+      player2.lives = gameState.player2.lives;
+      player2.shieldActive = gameState.player2.shieldActive;
+    } else {
+      player1.x = gameState.player1.x;
+      player1.y = gameState.player1.y;
+      player1.lives = gameState.player1.lives;
+      player1.shieldActive = gameState.player1.shieldActive;
+    }
+
+    // Sync game elements
+    bullets = gameState.bullets;
+    invaderBullets = gameState.invaderBullets;
+    invaders = gameState.invaders;
+    boss = gameState.boss;
+    barriers = gameState.barriers;
+    teamScore = gameState.teamScore;
+    invaderLevel = gameState.invaderLevel;
+    invaderSpeed = gameState.invaderSpeed;
+
+    updateInfoDisplay();
+    
+    // Sync pause state
+    if (gameState.gamePaused !== gamePaused) {
+      gamePaused = gameState.gamePaused;
+      const shop = document.getElementById('shop');
+      shop.style.display = gamePaused ? 'block' : 'none';
+      if (!gamePaused) {
+        draw();
+      }
+    }
+  }
+});
 
 // Update the socket event handlers for game state sync
 socket.on('bulletUpdate', ({ bullets: newBullets, invaderBullets: newInvaderBullets }) => {
@@ -919,5 +1002,39 @@ socket.on('playerMoved', ({ playerId, x }) => {
 socket.on('playerShot', ({ playerId, bulletData }) => {
   if (gameMode === "multiplayer_online") {
     bullets.push(bulletData);
+  }
+});
+
+// Add these new event listeners
+socket.on('playerLivesUpdate', ({ player1Lives, player2Lives }) => {
+  if (gameMode === "multiplayer_online") {
+    player1.lives = player1Lives;
+    player2.lives = player2Lives;
+    updateInfoDisplay();
+  }
+});
+
+socket.on('playerLeft', ({ message }) => {
+  alert(message);
+  backToLanding();
+});
+
+socket.on('playAgainResult', ({ restart, message }) => {
+  if (restart) {
+    // Reset game state
+    resetGameState();
+    // Start new game
+    startGame();
+  } else {
+    alert(message || "Game ended - returning to lobby");
+    backToLanding();
+  }
+});
+
+// Add vote update handler
+socket.on('voteUpdate', ({ votes, needed }) => {
+  if (document.getElementById('voteStatus')) {
+    document.getElementById('voteStatus').innerText = 
+      `Votes to restart: ${votes} / ${needed}`;
   }
 });

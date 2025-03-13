@@ -16,6 +16,7 @@ const io = socketIo(server, {
 
 let lobbies = [];
 let gameStates = {}; // Store game states for each lobby
+let playAgainVotes = {}; // Store play again votes for each lobby
 
 io.on('connection', (socket) => {
   console.log('New client connected with ID:', socket.id);
@@ -108,7 +109,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Add host start game handler
+  // Update host start game handler
   socket.on('hostStartGame', ({ lobbyId }) => {
     const lobby = lobbies.find(l => l.id === lobbyId);
     if (!lobby) {
@@ -119,26 +120,61 @@ io.on('connection', (socket) => {
       socket.emit('gameStartError', 'Only host can start the game');
       return;
     }
-    if (lobby.players.length < 1) {
-      socket.emit('gameStartError', 'Need at least one player to start');
+    if (lobby.players.length < 2) { // Change to require 2 players
+      socket.emit('gameStartError', 'Need 2 players to start');
       return;
     }
     io.to(lobbyId).emit('forceGameStart');
   });
 
-  // Add bullet sync
-  socket.on('bulletSync', ({ lobbyId, bullets, invaderBullets }) => {
-    socket.to(lobbyId).emit('bulletUpdate', { bullets, invaderBullets });
+  // Add full game sync handler
+  socket.on('fullGameSync', ({ lobbyId, gameState }) => {
+    gameStates[lobbyId] = gameState;
+    socket.to(lobbyId).emit('gameStateSync', gameState);
   });
 
-  // Add enemy sync
-  socket.on('enemySync', ({ lobbyId, invaders, boss }) => {
-    socket.to(lobbyId).emit('enemyUpdate', { invaders, boss });
-  });
+  // Remove old sync handlers as they're now handled by fullGameSync
+  // socket.on('bulletSync',...
+  // socket.on('enemySync',...
+  // socket.on('scoreSync',...
+  // socket.on('playerStatusSync',...
 
-  // Add score sync
-  socket.on('scoreSync', ({ lobbyId, teamScore, invaderLevel }) => {
-    socket.to(lobbyId).emit('scoreUpdate', { teamScore, invaderLevel });
+  socket.on('playAgainVote', ({ lobbyId, vote, playerId }) => {
+    if (!playAgainVotes[lobbyId]) {
+      playAgainVotes[lobbyId] = {
+        votes: new Map(),
+        timeout: setTimeout(() => {
+          // Clear votes after 30 seconds
+          delete playAgainVotes[lobbyId];
+          io.to(lobbyId).emit('playAgainResult', { 
+            restart: false, 
+            message: 'Vote timeout - too long to decide' 
+          });
+        }, 30000)
+      };
+    }
+
+    playAgainVotes[lobbyId].votes.set(playerId, vote);
+    
+    // Send vote update to all players
+    io.to(lobbyId).emit('voteUpdate', {
+      votes: Array.from(playAgainVotes[lobbyId].votes.values()).filter(v => v === 'yes').length,
+      needed: 2
+    });
+    
+    const lobby = lobbies.find(l => l.id === lobbyId);
+    if (lobby && playAgainVotes[lobbyId].votes.size === lobby.players.length) {
+      clearTimeout(playAgainVotes[lobbyId].timeout);
+      const allVotedYes = Array.from(playAgainVotes[lobbyId].votes.values())
+                         .every(v => v === 'yes');
+      
+      io.to(lobbyId).emit('playAgainResult', {
+        restart: allVotedYes,
+        message: allVotedYes ? 'All players voted to restart' : 'Some players voted to leave'
+      });
+      
+      delete playAgainVotes[lobbyId];
+    }
   });
 
   socket.on('disconnect', () => {
@@ -148,10 +184,13 @@ io.on('connection', (socket) => {
         delete gameStates[lobby.id].players?.[socket.id];
         delete gameStates[lobby.id].playerStatus?.[socket.id];
       }
-      lobby.players = lobby.players.filter(player => player.id !== socket.id);
-      if (lobby.players.length === 0) {
+      if (lobby.players.find(p => p.id === socket.id)) {
+        io.to(lobby.id).emit('playerLeft', { message: 'A player left the game. This lobby cannot continue.' });
+        // Remove the lobby and its game state
         delete gameStates[lobby.id];
+        delete playAgainVotes[lobby.id];
       }
+      lobby.players = lobby.players.filter(player => player.id !== socket.id);
     });
     lobbies = lobbies.filter(lobby => lobby.players.length > 0);
     io.emit('lobbyList', lobbies);
