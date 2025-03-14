@@ -190,7 +190,7 @@ socket.on("forceGameStart", () => {
         y: canvas.height - 50,
         width: 40,
         height: 20,
-        speed: 5,
+        speed: 7, // Changed from 5 to 7
         lives: 3,
         shieldActive: false,
         shieldCooldown: false,
@@ -203,7 +203,7 @@ socket.on("forceGameStart", () => {
         y: canvas.height - 50,
         width: 40,
         height: 20,
-        speed: 5,
+        speed: 7, // Changed from 5 to 7
         lives: 3,
         shieldActive: false,
         shieldCooldown: false,
@@ -219,7 +219,7 @@ socket.on("forceGameStart", () => {
         y: canvas.height - 50,
         width: 40,
         height: 20,
-        speed: 5,
+        speed: 7, // Changed from 5 to 7
         lives: 3,
         shieldActive: false,
         shieldCooldown: false,
@@ -232,7 +232,7 @@ socket.on("forceGameStart", () => {
         y: canvas.height - 50,
         width: 40,
         height: 20,
-        speed: 5,
+        speed: 7, // Changed from 5 to 7
         lives: 3,
         shieldActive: false,
         shieldCooldown: false,
@@ -1010,7 +1010,7 @@ function initGame() {
           y: canvas.height - 50,
           width: 40,
           height: 20,
-          speed: 5,
+          speed: 7, // Changed from 5 to 7
           lives: 3,
           shieldActive: false,
           shieldCooldown: false,
@@ -1024,7 +1024,7 @@ function initGame() {
           y: canvas.height - 50,
           width: 40,
           height: 20,
-          speed: 5,
+          speed: 7, // Changed from 5 to 7
           lives: 3,
           shieldActive: false,
           shieldCooldown: false,
@@ -1033,10 +1033,43 @@ function initGame() {
       }
     }
   } else if (gameMode === "singleplayer") {
-    player1 = { x: canvas.width/2 - 20, y: canvas.height - 50, width: 40, height: 20, speed: 5, lives: 3, shieldActive: false, shieldCooldown: false, lastShotTime: 0, name: document.getElementById("createName").value || "Player1" };
+    player1 = { 
+      x: canvas.width/2 - 20, 
+      y: canvas.height - 50, 
+      width: 40, 
+      height: 20, 
+      speed: 7, // Changed from 5 to 7
+      lives: 3, 
+      shieldActive: false, 
+      shieldCooldown: false, 
+      lastShotTime: 0, 
+      name: document.getElementById("createName").value || "Player1" 
+    };
   } else {
-    player1 = { x: canvas.width/2 - 100, y: canvas.height - 50, width: 40, height: 20, speed: 5, lives: 3, shieldActive: false, shieldCooldown: false, lastShotTime: 0, name: document.getElementById("createName").value || "Player1" };
-    player2 = { x: canvas.width/2 + 60, y: canvas.height - 50, width: 40, height: 20, speed: 5, lives: 3, shieldActive: false, shieldCooldown: false, lastShotTime: 0, name: document.getElementById("joinName").value || "Player2" };
+    player1 = { 
+      x: canvas.width/2 - 100, 
+      y: canvas.height - 50, 
+      width: 40, 
+      height: 20, 
+      speed: 7, // Changed from 5 to 7
+      lives: 3, 
+      shieldActive: false, 
+      shieldCooldown: false, 
+      lastShotTime: 0, 
+      name: document.getElementById("createName").value || "Player1" 
+    };
+    player2 = { 
+      x: canvas.width/2 + 60, 
+      y: canvas.height - 50, 
+      width: 40, 
+      height: 20, 
+      speed: 7, // Changed from 5 to 7
+      lives: 3, 
+      shieldActive: false, 
+      shieldCooldown: false, 
+      lastShotTime: 0, 
+      name: document.getElementById("joinName").value || "Player2" 
+    };
   }
   teamScore = 0;
   invaderLevel = 1;
@@ -1244,7 +1277,7 @@ socket.on("lobbyUpdate", (lobby) => {
         y: canvas.height - 50,
         width: 40,
         height: 20,
-        speed: 5,
+        speed: 7, // Changed from 5 to 7
         lives: 3,
         shieldActive: false,
         shieldCooldown: false,
@@ -1257,7 +1290,7 @@ socket.on("lobbyUpdate", (lobby) => {
         y: canvas.height - 50,
         width: 40,
         height: 20,
-        speed: 5,
+        speed: 7, // Changed from 5 to 7
         lives: 3,
         shieldActive: false,
         shieldCooldown: false,
@@ -1273,7 +1306,7 @@ socket.on("lobbyUpdate", (lobby) => {
         y: canvas.height - 50,
         width: 40,
         height: 20,
-        speed: 5,
+        speed: 7, // Changed from 5 to 7
         lives: 3,
         shieldActive: false,
         shieldCooldown: false,
@@ -1286,7 +1319,7 @@ socket.on("lobbyUpdate", (lobby) => {
         y: canvas.height - 50,
         width: 40,
         height: 20,
-        speed: 5,
+        speed: 7, // Changed from 5 to 7
         lives: 3,
         shieldActive: false,
         shieldCooldown: false,
@@ -1336,7 +1369,7 @@ socket.on("forceGameStart", () => {
         y: canvas.height - 50,
         width: 40,
         height: 20,
-        speed: 5,
+        speed: 7, // Changed from 5 to 7
         lives: 3,
         shieldActive: false,
         shieldCooldown: false,
@@ -1349,7 +1382,7 @@ socket.on("forceGameStart", () => {
         y: canvas.height - 50,
         width: 40,
         height: 20,
-        speed: 5,
+        speed: 7, // Changed from 5 to 7
         lives: 3,
         shieldActive: false,
         shieldCooldown: false,
@@ -1364,7 +1397,7 @@ socket.on("forceGameStart", () => {
         y: canvas.height - 50,
         width: 40,
         height: 20,
-        speed: 5,
+        speed: 7, // Changed from 5 to 7
         lives: 3,
         shieldActive: false,
         shieldCooldown: false,
@@ -1377,7 +1410,7 @@ socket.on("forceGameStart", () => {
         y: canvas.height - 50,
         width: 40,
         height: 20,
-        speed: 5,
+        speed: 7, // Changed from 5 to 7
         lives: 3,
         shieldActive: false,
         shieldCooldown: false,
@@ -1454,21 +1487,6 @@ function handlePlayerMovement() {
     }
   }
 }
-
-// Improve player movement response
-socket.on('playerMoved', ({ playerId, x }) => {
-  if (gameMode === "multiplayer_online") {
-    // Make sure we don't override our own position
-    if (playerId !== socket.id) {
-      // Update the correct player's position
-      if (player1 && player1.id === playerId) {
-        player1.x = x;
-      } else if (player2 && player2.id === playerId) {
-        player2.x = x;
-      }
-    }
-  }
-});
 
 // Fix draw players function
 function drawPlayers() {
@@ -1589,7 +1607,7 @@ function initGame() {
           y: canvas.height - 50,
           width: 40,
           height: 20,
-          speed: 5,
+          speed: 7, // Changed from 5 to 7
           lives: 3,
           shieldActive: false,
           shieldCooldown: false,
@@ -1603,7 +1621,7 @@ function initGame() {
           y: canvas.height - 50,
           width: 40,
           height: 20,
-          speed: 5,
+          speed: 7, // Changed from 5 to 7
           lives: 3,
           shieldActive: false,
           shieldCooldown: false,
@@ -1612,10 +1630,10 @@ function initGame() {
       }
     }
   } else if (gameMode === "singleplayer") {
-    player1 = { x: canvas.width/2 - 20, y: canvas.height - 50, width: 40, height: 20, speed: 5, lives: 3, shieldActive: false, shieldCooldown: false, lastShotTime: 0, name: document.getElementById("createName").value || "Player1" };
+    player1 = { x: canvas.width/2 - 20, y: canvas.height - 50, width: 40, height: 20, speed: 7, lives: 3, shieldActive: false, shieldCooldown: false, lastShotTime: 0, name: document.getElementById("createName").value || "Player1" };
   } else {
-    player1 = { x: canvas.width/2 - 100, y: canvas.height - 50, width: 40, height: 20, speed: 5, lives: 3, shieldActive: false, shieldCooldown: false, lastShotTime: 0, name: document.getElementById("createName").value || "Player1" };
-    player2 = { x: canvas.width/2 + 60, y: canvas.height - 50, width: 40, height: 20, speed: 5, lives: 3, shieldActive: false, shieldCooldown: false, lastShotTime: 0, name: document.getElementById("joinName").value || "Player2" };
+    player1 = { x: canvas.width/2 - 100, y: canvas.height - 50, width: 40, height: 20, speed: 7, lives: 3, shieldActive: false, shieldCooldown: false, lastShotTime: 0, name: document.getElementById("createName").value || "Player1" };
+    player2 = { x: canvas.width/2 + 60, y: canvas.height - 50, width: 40, height: 20, speed: 7, lives: 3, shieldActive: false, shieldCooldown: false, lastShotTime: 0, name: document.getElementById("joinName").value || "Player2" };
   }
   teamScore = 0;
   invaderLevel = 1;
@@ -1824,7 +1842,7 @@ function createPlayer(id, x, name) {
     y: canvas.height - 50,
     width: 40,
     height: 20,
-    speed: 5,
+    speed: 7, // Changed from 5 to 7 for better control
     lives: 3,
     shieldActive: false,
     shieldCooldown: false,
