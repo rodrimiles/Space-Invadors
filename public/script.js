@@ -3,9 +3,14 @@
 let gameMode; // Global game mode variable
 let currentLobbyId = null; // To store the lobby ID after creation
 
-// Change the socket connection to use localhost
-const socket = io('http://localhost:3000', {
+// Update socket connection to use window.location
+const socket = io(`http://${window.location.hostname}:3000`, {
   transports: ['websocket', 'polling'],
+  reconnection: true,
+  reconnectionAttempts: 5,
+  reconnectionDelay: 1000,
+  path: '/socket.io',
+  autoConnect: true
 });
 
 // Add more detailed logging
@@ -13,14 +18,30 @@ socket.on('connect', () => {
   console.log('Connected to server with ID:', socket.id);
 });
 
+// Add better error handling
 socket.on('connect_error', (error) => {
   console.error('Connection failed:', error);
+  alert('Failed to connect to server. Please check if the server is running on port 3000.');
 });
 
-// ----- Lobby & Leaderboard UI -----
-// Update lobby list on every change
-socket.on("lobbyList", (lobbies) => {
-  console.log('Lobby list updated:', lobbies);
+socket.on('reconnect_attempt', () => {
+  console.log('Attempting to reconnect...');
+});
+
+socket.on('reconnect_failed', () => {
+  console.error('Failed to reconnect after all attempts');
+  alert('Connection lost. Please refresh the page to try again.');
+});
+
+// Store lobbies list
+let lobbies = [];
+
+// Add better lobby list handling
+socket.on("lobbyList", (lobbiesList) => {
+  console.log('Received lobby list:', lobbiesList);
+  
+  // Store lobbies for later reference
+  lobbies = lobbiesList || [];
   
   // Update the list view
   const lobbyList = document.getElementById("lobbyList");
@@ -30,7 +51,12 @@ socket.on("lobbyList", (lobbies) => {
   const lobbySelect = document.getElementById("lobbySelect");
   lobbySelect.innerHTML = "<option value=''>Select a lobby...</option>";
   
-  lobbies.forEach(lobby => {
+  if (!lobbiesList || lobbiesList.length === 0) {
+    lobbyList.innerHTML = "<li>No lobbies available</li>";
+    return;
+  }
+  
+  lobbiesList.forEach(lobby => {
     // Create list item
     const li = document.createElement("li");
     li.innerText = `${lobby.lobbyName} (${lobby.id}) - (${lobby.players.length}/2)`;
@@ -58,13 +84,18 @@ function updateLobbyPlayersTable(lobby) {
   });
 }
 
-// Socket event: lobby update
+// Fix the duplicate lobbyUpdate handler issue
 socket.on("lobbyUpdate", (lobby) => {
   console.log('Lobby updated:', lobby);
   updateLobbyPlayersTable(lobby);
-  // Remove auto-start logic
+  
+  // Only show start button to host when 2 players are present
+  const isHost = socket.id === lobby.players[0]?.id;
+  const hasEnoughPlayers = lobby.players.length === 2;
   document.getElementById("hostStartButton").style.display = 
-    socket.id === lobby.players[0].id ? "block" : "none";
+    (isHost && hasEnoughPlayers) ? "block" : "none";
+    
+  // Don't auto-start the game, wait for host to click the start button
 });
 
 // Socket event: lobby cancelled
@@ -113,10 +144,19 @@ socket.on("lobbyUpdate", (lobby) => {
   console.log('Lobby updated:', lobby);
   updateLobbyPlayersTable(lobby);
   
-  // Only auto-start if 2 players
+  // Start game automatically when 2 players join
   if (lobby.players.length === 2) {
-    document.getElementById("hostStartButton").style.display = "none";
+    document.getElementById("waitingScreen").style.display = "none";
     startGame();
+    
+    // Set player2's ID for the second player who joined
+    if (socket.id === lobby.players[1].id) {
+      player2.id = socket.id;
+      player1.id = lobby.players[0].id;
+    } else {
+      player1.id = socket.id;
+      player2.id = lobby.players[1].id;
+    }
   }
 });
 
@@ -129,6 +169,80 @@ function hostStartGame() {
 
 socket.on("gameStartError", (message) => {
   alert(message);
+});
+
+// Update forceGameStart handler to properly initialize players
+socket.on("forceGameStart", () => {
+  console.log('Force game start received');
+  document.getElementById("waitingScreen").style.display = "none";
+  
+  // Get the current lobby data before starting
+  const currentLobby = lobbies.find(l => l.id === currentLobbyId);
+  if (currentLobby && currentLobby.players.length === 2) {
+    // Set player IDs based on the lobby data
+    if (socket.id === currentLobby.players[1].id) {
+      // Second player joins
+      console.log('Initializing as Player 2');
+      // Initialize player objects
+      player2 = {
+        id: socket.id,
+        x: canvas.width/2 + 60,
+        y: canvas.height - 50,
+        width: 40,
+        height: 20,
+        speed: 5,
+        lives: 3,
+        shieldActive: false,
+        shieldCooldown: false,
+        lastShotTime: 0,
+        name: currentLobby.players[1].name
+      };
+      player1 = {
+        id: currentLobby.players[0].id,
+        x: canvas.width/2 - 100,
+        y: canvas.height - 50,
+        width: 40,
+        height: 20,
+        speed: 5,
+        lives: 3,
+        shieldActive: false,
+        shieldCooldown: false,
+        lastShotTime: 0,
+        name: currentLobby.players[0].name
+      };
+    } else {
+      // First player (host)
+      console.log('Initializing as Player 1');
+      player1 = {
+        id: socket.id,
+        x: canvas.width/2 - 100,
+        y: canvas.height - 50,
+        width: 40,
+        height: 20,
+        speed: 5,
+        lives: 3,
+        shieldActive: false,
+        shieldCooldown: false,
+        lastShotTime: 0,
+        name: currentLobby.players[0].name
+      };
+      player2 = {
+        id: currentLobby.players[1].id,
+        x: canvas.width/2 + 60,
+        y: canvas.height - 50,
+        width: 40,
+        height: 20,
+        speed: 5,
+        lives: 3,
+        shieldActive: false,
+        shieldCooldown: false,
+        lastShotTime: 0,
+        name: currentLobby.players[1].name
+      };
+    }
+  }
+  
+  startGame();
 });
 
 socket.on("forceGameStart", () => {
@@ -198,18 +312,21 @@ function backToLandingLobby() {
   backToLanding();
 }
 
-// Update startGame function to ensure shop is closed
+// Fix start game to properly hide all menus
 function startGame() {
+  // Hide all menu screens
+  const screens = ["lobbyScreen", "multiplayerOptions", "waitingScreen", 
+                  "landingScreen", "guideScreen", "gameOverPopup"];
+  screens.forEach(screen => {
+    document.getElementById(screen).style.display = "none";
+  });
+  
+  // Show only game container
+  document.getElementById("gameContainer").style.display = "block";
+  
   const shop = document.getElementById('shop');
   shop.style.display = 'none';
   gamePaused = false;
-  
-  document.getElementById("lobbyScreen").style.display = "none";
-  document.getElementById("multiplayerOptions").style.display = "none";
-  document.getElementById("waitingScreen").style.display = "none";
-  document.getElementById("landingScreen").style.display = "none";
-  document.getElementById("guideScreen").style.display = "none";
-  document.getElementById("gameContainer").style.display = "block";
   
   initGame();
 }
@@ -236,7 +353,10 @@ let speedyDoubleActive = false;
 let speedyTripleActive = false;
 let speedyExpire = 0;
 
+const FPS = 60;
+const FRAME_TIME = 1000 / FPS;
 const SHOT_COOLDOWN = 300;
+let lastTime = 0;
 
 let player1, player2;
 
@@ -638,17 +758,20 @@ function nextLevel() {
 
 function gameOver() {
   document.getElementById('gameOverPopup').style.display = 'block';
-  document.getElementById('finalScore').innerText = `Team Score: ${teamScore}`;
   
   if (gameMode === "multiplayer_online") {
     document.getElementById('gameOverPopup').innerHTML = `
       <h2>Game Over</h2>
       <p id="finalScore">Team Score: ${teamScore}</p>
       <div id="voteStatus">Waiting for votes...</div>
-      <button onclick="votePlayAgain('yes')">Vote to Play Again</button>
-      <button onclick="votePlayAgain('no')">Vote to Leave</button>
-      <button onclick="leaveGame()">Leave Immediately</button>
+      <div id="votingButtons">
+        <button onclick="votePlayAgain('yes')" class="voteButton">Play Again</button>
+        <button onclick="votePlayAgain('no')" class="voteButton">Return to Lobby</button>
+      </div>
+      <button onclick="leaveGameImmediately()">Leave Game</button>
     `;
+  } else {
+    document.getElementById('finalScore').innerText = `Team Score: ${teamScore}`;
   }
   
   cancelAnimationFrame(animationFrameId);
@@ -714,38 +837,35 @@ function resetGameState() {
 }
 
 // Ensure the player's lives do not go below 0
+// Fix player movement and sync
 function handlePlayerMovement() {
   if (gameMode === "multiplayer_online") {
-    if (socket.id === player1.id) {
-      // First player controls white ship
+    const myPlayer = socket.id === player1?.id ? player1 : player2;
+    
+    if (myPlayer?.lives > 0) {
+      let moved = false;
+      let newX = myPlayer.x;
+      
       if (keysP1["KeyA"]) {
-        player1.x -= player1.speed;
-        if (player1.x < 0) player1.x = 0;
-        socket.emit('playerMove', { lobbyId: currentLobbyId, playerId: player1.id, x: player1.x });
+        newX = Math.max(0, myPlayer.x - myPlayer.speed);
+        moved = true;
       }
       if (keysP1["KeyD"]) {
-        player1.x += player1.speed;
-        if (player1.x + player1.width > canvas.width) player1.x = canvas.width - player1.width;
-        socket.emit('playerMove', { lobbyId: currentLobbyId, playerId: player1.id, x: player1.x });
+        newX = Math.min(canvas.width - myPlayer.width, myPlayer.x + myPlayer.speed);
+        moved = true;
       }
+      
+      if (moved && newX !== myPlayer.x) {
+        myPlayer.x = newX;
+        socket.emit('playerMove', {
+          lobbyId: currentLobbyId,
+          playerId: myPlayer.id,
+          x: newX
+        });
+      }
+      
       if (keysP1["Space"]) {
-        shoot(player1);
-        keysP1["Space"] = false;
-      }
-    } else if (socket.id === player2.id) {
-      // Second player controls cyan ship
-      if (keysP1["KeyA"]) {
-        player2.x -= player2.speed;
-        if (player2.x < 0) player2.x = 0;
-        socket.emit('playerMove', { lobbyId: currentLobbyId, playerId: player2.id, x: player2.x });
-      }
-      if (keysP1["KeyD"]) {
-        player2.x += player2.speed;
-        if (player2.x + player2.width > canvas.width) player2.x = canvas.width - player2.width;
-        socket.emit('playerMove', { lobbyId: currentLobbyId, playerId: player2.id, x: player2.x });
-      }
-      if (keysP1["Space"]) {
-        shoot(player2);
+        shoot(myPlayer);
         keysP1["Space"] = false;
       }
     }
@@ -771,21 +891,36 @@ function handlePlayerMovement() {
   }
 }
 
-// Main draw function
-function draw() {
-  if (gamePaused) return;
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  handlePlayerMovement();
-  drawInvaders();
-  updateBullets();
-  drawBarriers();
-  ctx.fillStyle = 'yellow';
-  bullets.forEach(bullet => { ctx.fillRect(bullet.x, bullet.y, 5, 10); });
-  ctx.fillStyle = 'red';
-  invaderBullets.forEach(bullet => { ctx.fillRect(bullet.x, bullet.y, 5, 10); });
-
-  if (gameMode === "singleplayer") {
+// Fix draw players function
+function drawPlayers() {
+  if (gameMode === "multiplayer_online") {
+    // Make sure player objects exist before trying to draw them
+    if (!player1 || !player2) return;
+    
+    // Draw player 1
     if (player1.lives > 0) {
+      ctx.fillStyle = player1.id === socket.id ? 'white' : 'cyan';
+      ctx.fillRect(player1.x, player1.y, player1.width, player1.height);
+      if (player1.shieldActive) {
+        ctx.strokeStyle = player1.id === socket.id ? 'white' : 'cyan';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(player1.x - 5, player1.y - 5, player1.width + 10, player1.height + 10);
+      }
+    }
+    
+    // Draw player 2
+    if (player2.lives > 0) {
+      ctx.fillStyle = player2.id === socket.id ? 'white' : 'cyan';
+      ctx.fillRect(player2.x, player2.y, player2.width, player2.height);
+      if (player2.shieldActive) {
+        ctx.strokeStyle = player2.id === socket.id ? 'white' : 'cyan';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(player2.x - 5, player2.y - 5, player2.width + 10, player2.height + 10);
+      }
+    }
+  } else if (gameMode === "singleplayer") {
+    // Single player mode
+    if (player1 && player1.lives > 0) {
       ctx.fillStyle = 'white';
       ctx.fillRect(player1.x, player1.y, player1.width, player1.height);
       if (player1.shieldActive) {
@@ -795,7 +930,8 @@ function draw() {
       }
     }
   } else {
-    if (player1.lives > 0) {
+    // Local multiplayer mode
+    if (player1 && player1.lives > 0) {
       ctx.fillStyle = 'white';
       ctx.fillRect(player1.x, player1.y, player1.width, player1.height);
       if (player1.shieldActive) {
@@ -804,7 +940,7 @@ function draw() {
         ctx.strokeRect(player1.x - 5, player1.y - 5, player1.width + 10, player1.height + 10);
       }
     }
-    if (player2.lives > 0) {
+    if (player2 && player2.lives > 0) {
       ctx.fillStyle = 'cyan';
       ctx.fillRect(player2.x, player2.y, player2.width, player2.height);
       if (player2.shieldActive) {
@@ -814,6 +950,35 @@ function draw() {
       }
     }
   }
+}
+
+// Fix the main draw function to prevent double-drawing
+// Fix game speed with proper animation frame timing
+function draw(currentTime) {
+  if (gamePaused) return;
+
+  animationFrameId = requestAnimationFrame(draw);
+  
+  if (!currentTime) currentTime = performance.now();
+  
+  const deltaTime = currentTime - lastTime;
+  if (deltaTime < FRAME_TIME) return;
+  
+  lastTime = currentTime;
+  
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
+  handlePlayerMovement();
+  drawInvaders();
+  updateBullets();
+  drawBarriers();
+  drawPlayers();
+  
+  // Draw bullets
+  ctx.fillStyle = 'yellow';
+  bullets.forEach(bullet => ctx.fillRect(bullet.x, bullet.y, 5, 10));
+  ctx.fillStyle = 'red';
+  invaderBullets.forEach(bullet => ctx.fillRect(bullet.x, bullet.y, 5, 10));
   
   updateInvaders();
   
@@ -827,44 +992,48 @@ function draw() {
     gameOver();
     return;
   }
-  
-  if (gameMode === "multiplayer_online") {
-    syncGameState();
-  }
-  
-  animationFrameId = requestAnimationFrame(draw);
 }
 
+// Update start animation
 function initGame() {
-  if (gameMode === "singleplayer") {
+  if (gameMode === "multiplayer_online") {
+    console.log('Game starting with players:', { player1, player2 });
+    
+    // Ensure both players are initialized
+    if (!player1 || !player2) {
+      console.error("Players not properly initialized!");
+      // Create default players if they don't exist (fallback)
+      if (!player1) {
+        player1 = {
+          id: socket.id,
+          x: canvas.width/2 - 100,
+          y: canvas.height - 50,
+          width: 40,
+          height: 20,
+          speed: 5,
+          lives: 3,
+          shieldActive: false,
+          shieldCooldown: false,
+          lastShotTime: 0
+        };
+      }
+      if (!player2) {
+        player2 = {
+          id: "other-player",
+          x: canvas.width/2 + 60,
+          y: canvas.height - 50,
+          width: 40,
+          height: 20,
+          speed: 5,
+          lives: 3,
+          shieldActive: false,
+          shieldCooldown: false,
+          lastShotTime: 0
+        };
+      }
+    }
+  } else if (gameMode === "singleplayer") {
     player1 = { x: canvas.width/2 - 20, y: canvas.height - 50, width: 40, height: 20, speed: 5, lives: 3, shieldActive: false, shieldCooldown: false, lastShotTime: 0, name: document.getElementById("createName").value || "Player1" };
-  } else if (gameMode === "multiplayer_online") {
-    player1 = {
-      id: socket.id,
-      x: canvas.width/2 - 100,
-      y: canvas.height - 50,
-      width: 40,
-      height: 20,
-      speed: 5,
-      lives: 3,
-      shieldActive: false,
-      shieldCooldown: false,
-      lastShotTime: 0,
-      name: document.getElementById("createName").value || "Player1"
-    };
-    player2 = {
-      id: null, // Will be set when second player joins
-      x: canvas.width/2 + 60,
-      y: canvas.height - 50,
-      width: 40,
-      height: 20,
-      speed: 5,
-      lives: 3,
-      shieldActive: false,
-      shieldCooldown: false,
-      lastShotTime: 0,
-      name: document.getElementById("joinName").value || "Player2"
-    };
   } else {
     player1 = { x: canvas.width/2 - 100, y: canvas.height - 50, width: 40, height: 20, speed: 5, lives: 3, shieldActive: false, shieldCooldown: false, lastShotTime: 0, name: document.getElementById("createName").value || "Player1" };
     player2 = { x: canvas.width/2 + 60, y: canvas.height - 50, width: 40, height: 20, speed: 5, lives: 3, shieldActive: false, shieldCooldown: false, lastShotTime: 0, name: document.getElementById("joinName").value || "Player2" };
@@ -880,7 +1049,8 @@ function initGame() {
   createInvaders();
   createBarriers();
   updateInfoDisplay();
-  draw();
+  lastTime = performance.now();
+  animationFrameId = requestAnimationFrame(draw);
 }
 
 // Add game state sync functions
@@ -889,18 +1059,6 @@ function syncGameState() {
     socket.emit('fullGameSync', {
       lobbyId: currentLobbyId,
       gameState: {
-        player1: {
-          x: player1.x,
-          y: player1.y,
-          lives: player1.lives,
-          shieldActive: player1.shieldActive
-        },
-        player2: {
-          x: player2.x,
-          y: player2.y,
-          lives: player2.lives,
-          shieldActive: player2.shieldActive
-        },
         bullets,
         invaderBullets,
         invaders,
@@ -909,7 +1067,16 @@ function syncGameState() {
         teamScore,
         invaderLevel,
         invaderSpeed,
-        gamePaused
+        gamePaused,
+        // Include only player states, not positions
+        player1: {
+          lives: player1.lives,
+          shieldActive: player1.shieldActive
+        },
+        player2: {
+          lives: player2.lives,
+          shieldActive: player2.shieldActive
+        }
       }
     });
   }
@@ -989,12 +1156,15 @@ socket.on('gameStateUpdate', (state) => {
   }
 });
 
+// Improve movement sync handler
 socket.on('playerMoved', ({ playerId, x }) => {
   if (gameMode === "multiplayer_online") {
-    if (playerId === player1.id) {
-      player1.x = x;
-    } else if (playerId === player2.id) {
-      player2.x = x;
+    if (playerId !== socket.id) {
+      if (player1 && player1.id === playerId) {
+        player1.x = x;
+      } else if (player2 && player2.id === playerId) {
+        player2.x = x;
+      }
     }
   }
 });
@@ -1038,3 +1208,761 @@ socket.on('voteUpdate', ({ votes, needed }) => {
       `Votes to restart: ${votes} / ${needed}`;
   }
 });
+
+// Add new leave game immediately function
+function leaveGameImmediately() {
+  if (currentLobbyId) {
+    socket.emit('playerLeft', { lobbyId: currentLobbyId });
+  }
+  backToLanding();
+}
+
+socket.on("joinLobby", ({ lobbyId, lobby }) => {
+  console.log('Joined lobby:', lobbyId, lobby);
+  currentLobbyId = lobbyId;
+  document.getElementById("lobbyScreen").style.display = "none";
+  document.getElementById("waitingScreen").style.display = "block";
+  updateLobbyPlayersTable(lobby);
+});
+
+socket.on("lobbyUpdate", (lobby) => {
+  console.log('Lobby updated:', lobby);
+  updateLobbyPlayersTable(lobby);
+  
+  // Start game automatically when 2 players join
+  if (lobby.players.length === 2) {
+    console.log('Starting game with players:', lobby.players);
+    document.getElementById("waitingScreen").style.display = "none";
+    
+    // Set player IDs before starting game
+    if (socket.id === lobby.players[1].id) {
+      // Second player joins
+      console.log('Initializing as Player 2');
+      player2 = {
+        id: socket.id,
+        x: canvas.width/2 + 60,
+        y: canvas.height - 50,
+        width: 40,
+        height: 20,
+        speed: 5,
+        lives: 3,
+        shieldActive: false,
+        shieldCooldown: false,
+        lastShotTime: 0,
+        name: lobby.players[1].name
+      };
+      player1 = {
+        id: lobby.players[0].id,
+        x: canvas.width/2 - 100,
+        y: canvas.height - 50,
+        width: 40,
+        height: 20,
+        speed: 5,
+        lives: 3,
+        shieldActive: false,
+        shieldCooldown: false,
+        lastShotTime: 0,
+        name: lobby.players[0].name
+      };
+    } else {
+      // First player (host)
+      console.log('Initializing as Player 1');
+      player1 = {
+        id: socket.id,
+        x: canvas.width/2 - 100,
+        y: canvas.height - 50,
+        width: 40,
+        height: 20,
+        speed: 5,
+        lives: 3,
+        shieldActive: false,
+        shieldCooldown: false,
+        lastShotTime: 0,
+        name: lobby.players[0].name
+      };
+      player2 = {
+        id: lobby.players[1].id,
+        x: canvas.width/2 + 60,
+        y: canvas.height - 50,
+        width: 40,
+        height: 20,
+        speed: 5,
+        lives: 3,
+        shieldActive: false,
+        shieldCooldown: false,
+        lastShotTime: 0,
+        name: lobby.players[1].name
+      };
+    }
+    startGame();
+  }
+});
+
+// Update the lobby event handlers
+socket.on("lobbyUpdate", (lobby) => {
+  console.log('Lobby updated:', lobby);
+  updateLobbyPlayersTable(lobby);
+  
+  // Only show start button to host when 2 players are present
+  const isHost = socket.id === lobby.players[0]?.id;
+  const hasEnoughPlayers = lobby.players.length === 2;
+  document.getElementById("hostStartButton").style.display = 
+    (isHost && hasEnoughPlayers) ? "block" : "none";
+});
+
+// Update forceGameStart handler to focus on game only
+socket.on("forceGameStart", () => {
+  console.log('Force game start received');
+  
+  // Hide all non-game elements
+  document.getElementById("waitingScreen").style.display = "none";
+  document.getElementById("lobbyScreen").style.display = "none";
+  document.getElementById("landingScreen").style.display = "none";
+  document.getElementById("multiplayerOptions").style.display = "none";
+  document.getElementById("guideScreen").style.display = "none";
+  
+  // Show only game container
+  document.getElementById("gameContainer").style.display = "block";
+  
+  // Get the current lobby data before starting
+  const currentLobby = lobbies.find(l => l.id === currentLobbyId);
+  if (currentLobby && currentLobby.players.length === 2) {
+    // Initialize players properly
+    if (socket.id === currentLobby.players[1].id) {
+      console.log('Initializing as Player 2');
+      player2 = {
+        id: socket.id,
+        x: canvas.width/2 + 60,
+        y: canvas.height - 50,
+        width: 40,
+        height: 20,
+        speed: 5,
+        lives: 3,
+        shieldActive: false,
+        shieldCooldown: false,
+        lastShotTime: 0,
+        name: currentLobby.players[1].name
+      };
+      player1 = {
+        id: currentLobby.players[0].id,
+        x: canvas.width/2 - 100,
+        y: canvas.height - 50,
+        width: 40,
+        height: 20,
+        speed: 5,
+        lives: 3,
+        shieldActive: false,
+        shieldCooldown: false,
+        lastShotTime: 0,
+        name: currentLobby.players[0].name
+      };
+    } else {
+      console.log('Initializing as Player 1');
+      player1 = {
+        id: socket.id,
+        x: canvas.width/2 - 100,
+        y: canvas.height - 50,
+        width: 40,
+        height: 20,
+        speed: 5,
+        lives: 3,
+        shieldActive: false,
+        shieldCooldown: false,
+        lastShotTime: 0,
+        name: currentLobby.players[0].name
+      };
+      player2 = {
+        id: currentLobby.players[1].id,
+        x: canvas.width/2 + 60,
+        y: canvas.height - 50,
+        width: 40,
+        height: 20,
+        speed: 5,
+        lives: 3,
+        shieldActive: false,
+        shieldCooldown: false,
+        lastShotTime: 0,
+        name: currentLobby.players[1].name
+      };
+    }
+  }
+  
+  initGame();
+});
+
+// Fix player movement handling for better synchronization
+function handlePlayerMovement() {
+  if (gameMode === "multiplayer_online") {
+    // Identify which player is controlled by this client
+    let myPlayer = null;
+    if (socket.id === player1?.id) myPlayer = player1;
+    else if (socket.id === player2?.id) myPlayer = player2;
+    
+    if (myPlayer && myPlayer.lives > 0) {
+      let moved = false;
+      let newX = myPlayer.x;
+      
+      if (keysP1["KeyA"]) {
+        newX -= myPlayer.speed;
+        if (newX < 0) newX = 0;
+        moved = true;
+      }
+      if (keysP1["KeyD"]) {
+        newX += myPlayer.speed;
+        if (newX + myPlayer.width > canvas.width) {
+          newX = canvas.width - myPlayer.width;
+        }
+        moved = true;
+      }
+      
+      // Only update position and send movement if actually moved
+      if (moved && newX !== myPlayer.x) {
+        myPlayer.x = newX;
+        
+        // Send movement update to server with low latency
+        socket.emit('playerMove', {
+          lobbyId: currentLobbyId,
+          playerId: myPlayer.id,
+          x: newX,
+          timestamp: Date.now()
+        });
+      }
+      
+      if (keysP1["Space"]) {
+        shoot(myPlayer);
+        keysP1["Space"] = false;
+      }
+    }
+  } else {
+    if (gameMode === "singleplayer") {
+      if (player1.lives > 0) {
+        if (keysP1["KeyA"]) { player1.x -= player1.speed; if (player1.x < 0) player1.x = 0; }
+        if (keysP1["KeyD"]) { player1.x += player1.speed; if (player1.x + player1.width > canvas.width) player1.x = canvas.width - player1.width; }
+        if (keysP1["Space"]) { shoot(player1); keysP1["Space"] = false; }
+      }
+    } else {
+      if (player1.lives > 0) {
+        if (keysP1["KeyA"]) { player1.x -= player1.speed; if (player1.x < 0) player1.x = 0; }
+        if (keysP1["KeyD"]) { player1.x += player1.speed; if (player1.x + player1.width > canvas.width) player1.x = canvas.width - player1.width; }
+        if (keysP1["Space"]) { shoot(player1); keysP1["Space"] = false; }
+      }
+      if (player2.lives > 0) {
+        if (keysP2["ArrowLeft"]) { player2.x -= player2.speed; if (player2.x < 0) player2.x = 0; }
+        if (keysP2["ArrowRight"]) { player2.x += player2.speed; if (player2.x + player2.width > canvas.width) player2.x = canvas.width - player2.width; }
+        if (keysP2["Enter"] || keysP2["NumpadEnter"]) { shoot(player2); keysP2["Enter"] = keysP2["NumpadEnter"] = false; }
+      }
+    }
+  }
+}
+
+// Improve player movement response
+socket.on('playerMoved', ({ playerId, x }) => {
+  if (gameMode === "multiplayer_online") {
+    // Make sure we don't override our own position
+    if (playerId !== socket.id) {
+      // Update the correct player's position
+      if (player1 && player1.id === playerId) {
+        player1.x = x;
+      } else if (player2 && player2.id === playerId) {
+        player2.x = x;
+      }
+    }
+  }
+});
+
+// Fix draw players function
+function drawPlayers() {
+  if (gameMode === "multiplayer_online") {
+    // Make sure player objects exist before trying to draw them
+    if (!player1 || !player2) return;
+    
+    // Draw player 1
+    if (player1.lives > 0) {
+      ctx.fillStyle = player1.id === socket.id ? 'white' : 'cyan';
+      ctx.fillRect(player1.x, player1.y, player1.width, player1.height);
+      if (player1.shieldActive) {
+        ctx.strokeStyle = player1.id === socket.id ? 'white' : 'cyan';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(player1.x - 5, player1.y - 5, player1.width + 10, player1.height + 10);
+      }
+    }
+    
+    // Draw player 2
+    if (player2.lives > 0) {
+      ctx.fillStyle = player2.id === socket.id ? 'white' : 'cyan';
+      ctx.fillRect(player2.x, player2.y, player2.width, player2.height);
+      if (player2.shieldActive) {
+        ctx.strokeStyle = player2.id === socket.id ? 'white' : 'cyan';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(player2.x - 5, player2.y - 5, player2.width + 10, player2.height + 10);
+      }
+    }
+  } else if (gameMode === "singleplayer") {
+    // Single player mode
+    if (player1 && player1.lives > 0) {
+      ctx.fillStyle = 'white';
+      ctx.fillRect(player1.x, player1.y, player1.width, player1.height);
+      if (player1.shieldActive) {
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(player1.x - 5, player1.y - 5, player1.width + 10, player1.height + 10);
+      }
+    }
+  } else {
+    // Local multiplayer mode
+    if (player1 && player1.lives > 0) {
+      ctx.fillStyle = 'white';
+      ctx.fillRect(player1.x, player1.y, player1.width, player1.height);
+      if (player1.shieldActive) {
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(player1.x - 5, player1.y - 5, player1.width + 10, player1.height + 10);
+      }
+    }
+    if (player2 && player2.lives > 0) {
+      ctx.fillStyle = 'cyan';
+      ctx.fillRect(player2.x, player2.y, player2.width, player2.height);
+      if (player2.shieldActive) {
+        ctx.strokeStyle = 'cyan';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(player2.x - 5, player2.y - 5, player2.width + 10, player2.height + 10);
+      }
+    }
+  }
+}
+
+// Fix the main draw function to prevent double-drawing
+// Fix game speed with proper animation frame timing
+function draw(currentTime) {
+  if (gamePaused) return;
+
+  animationFrameId = requestAnimationFrame(draw);
+  
+  if (!currentTime) currentTime = performance.now();
+  
+  const deltaTime = currentTime - lastTime;
+  if (deltaTime < FRAME_TIME) return;
+  
+  lastTime = currentTime;
+  
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
+  handlePlayerMovement();
+  drawInvaders();
+  updateBullets();
+  drawBarriers();
+  drawPlayers();
+  
+  // Draw bullets
+  ctx.fillStyle = 'yellow';
+  bullets.forEach(bullet => ctx.fillRect(bullet.x, bullet.y, 5, 10));
+  ctx.fillStyle = 'red';
+  invaderBullets.forEach(bullet => ctx.fillRect(bullet.x, bullet.y, 5, 10));
+  
+  updateInvaders();
+  
+  if (checkAllEnemiesDefeated() && !nextLevelScheduled) {
+    nextLevelScheduled = true;
+    setTimeout(() => { nextLevel(); nextLevelScheduled = false; }, 2000);
+  }
+  
+  if ((gameMode === "singleplayer" && player1.lives <= 0) ||
+      (gameMode !== "singleplayer" && player1.lives <= 0 && player2.lives <= 0)) {
+    gameOver();
+    return;
+  }
+}
+
+// Update start animation
+function initGame() {
+  if (gameMode === "multiplayer_online") {
+    console.log('Game starting with players:', { player1, player2 });
+    
+    // Ensure both players are initialized
+    if (!player1 || !player2) {
+      console.error("Players not properly initialized!");
+      // Create default players if they don't exist (fallback)
+      if (!player1) {
+        player1 = {
+          id: socket.id,
+          x: canvas.width/2 - 100,
+          y: canvas.height - 50,
+          width: 40,
+          height: 20,
+          speed: 5,
+          lives: 3,
+          shieldActive: false,
+          shieldCooldown: false,
+          lastShotTime: 0
+        };
+      }
+      if (!player2) {
+        player2 = {
+          id: "other-player",
+          x: canvas.width/2 + 60,
+          y: canvas.height - 50,
+          width: 40,
+          height: 20,
+          speed: 5,
+          lives: 3,
+          shieldActive: false,
+          shieldCooldown: false,
+          lastShotTime: 0
+        };
+      }
+    }
+  } else if (gameMode === "singleplayer") {
+    player1 = { x: canvas.width/2 - 20, y: canvas.height - 50, width: 40, height: 20, speed: 5, lives: 3, shieldActive: false, shieldCooldown: false, lastShotTime: 0, name: document.getElementById("createName").value || "Player1" };
+  } else {
+    player1 = { x: canvas.width/2 - 100, y: canvas.height - 50, width: 40, height: 20, speed: 5, lives: 3, shieldActive: false, shieldCooldown: false, lastShotTime: 0, name: document.getElementById("createName").value || "Player1" };
+    player2 = { x: canvas.width/2 + 60, y: canvas.height - 50, width: 40, height: 20, speed: 5, lives: 3, shieldActive: false, shieldCooldown: false, lastShotTime: 0, name: document.getElementById("joinName").value || "Player2" };
+  }
+  teamScore = 0;
+  invaderLevel = 1;
+  invaderSpeed = 2;
+  invaderDirection = 1;
+  bossDirection = 1;
+  boss = null;
+  bullets = [];
+  invaderBullets = [];
+  createInvaders();
+  createBarriers();
+  updateInfoDisplay();
+  lastTime = performance.now();
+  animationFrameId = requestAnimationFrame(draw);
+}
+
+// Add game state sync functions
+function syncGameState() {
+  if (gameMode === "multiplayer_online" && currentLobbyId) {
+    socket.emit('fullGameSync', {
+      lobbyId: currentLobbyId,
+      gameState: {
+        bullets,
+        invaderBullets,
+        invaders,
+        boss,
+        barriers,
+        teamScore,
+        invaderLevel,
+        invaderSpeed,
+        gamePaused,
+        // Include only player states, not positions
+        player1: {
+          lives: player1.lives,
+          shieldActive: player1.shieldActive
+        },
+        player2: {
+          lives: player2.lives,
+          shieldActive: player2.shieldActive
+        }
+      }
+    });
+  }
+}
+
+// Add new event listener for full game sync
+socket.on('gameStateSync', (gameState) => {
+  if (gameMode === "multiplayer_online") {
+    // Update player positions and states
+    if (socket.id === player1.id) {
+      player2.x = gameState.player2.x;
+      player2.y = gameState.player2.y;
+      player2.lives = gameState.player2.lives;
+      player2.shieldActive = gameState.player2.shieldActive;
+    } else {
+      player1.x = gameState.player1.x;
+      player1.y = gameState.player1.y;
+      player1.lives = gameState.player1.lives;
+      player1.shieldActive = gameState.player1.shieldActive;
+    }
+
+    // Sync game elements
+    bullets = gameState.bullets;
+    invaderBullets = gameState.invaderBullets;
+    invaders = gameState.invaders;
+    boss = gameState.boss;
+    barriers = gameState.barriers;
+    teamScore = gameState.teamScore;
+    invaderLevel = gameState.invaderLevel;
+    invaderSpeed = gameState.invaderSpeed;
+
+    updateInfoDisplay();
+    
+    // Sync pause state
+    if (gameState.gamePaused !== gamePaused) {
+      gamePaused = gameState.gamePaused;
+      const shop = document.getElementById('shop');
+      shop.style.display = gamePaused ? 'block' : 'none';
+      if (!gamePaused) {
+        draw();
+      }
+    }
+  }
+});
+
+// Update the socket event handlers for game state sync
+socket.on('bulletUpdate', ({ bullets: newBullets, invaderBullets: newInvaderBullets }) => {
+  if (gameMode === "multiplayer_online") {
+    bullets = newBullets;
+    invaderBullets = newInvaderBullets;
+  }
+});
+
+socket.on('enemyUpdate', ({ invaders: newInvaders, boss: newBoss }) => {
+  if (gameMode === "multiplayer_online") {
+    invaders = newInvaders;
+    boss = newBoss;
+  }
+});
+
+socket.on('scoreUpdate', ({ teamScore: newScore, invaderLevel: newLevel }) => {
+  if (gameMode === "multiplayer_online") {
+    teamScore = newScore;
+    invaderLevel = newLevel;
+    updateInfoDisplay();
+  }
+});
+
+socket.on('gameStateUpdate', (state) => {
+  if (gameMode === "multiplayer_online") {
+    invaders = state.invaders;
+    teamScore = state.teamScore;
+    invaderLevel = state.invaderLevel;
+    invaderSpeed = state.invaderSpeed;
+    barriers = state.barriers;
+    updateInfoDisplay();
+  }
+});
+
+// Improve movement sync handler
+socket.on('playerMoved', ({ playerId, x }) => {
+  if (gameMode === "multiplayer_online") {
+    if (playerId !== socket.id) {
+      if (player1 && player1.id === playerId) {
+        player1.x = x;
+      } else if (player2 && player2.id === playerId) {
+        player2.x = x;
+      }
+    }
+  }
+});
+
+socket.on('playerShot', ({ playerId, bulletData }) => {
+  if (gameMode === "multiplayer_online") {
+    bullets.push(bulletData);
+  }
+});
+
+// Add these new event listeners
+socket.on('playerLivesUpdate', ({ player1Lives, player2Lives }) => {
+  if (gameMode === "multiplayer_online") {
+    player1.lives = player1Lives;
+    player2.lives = player2Lives;
+    updateInfoDisplay();
+  }
+});
+
+socket.on('playerLeft', ({ message }) => {
+  alert(message);
+  backToLanding();
+});
+
+socket.on('playAgainResult', ({ restart, message }) => {
+  if (restart) {
+    // Reset game state
+    resetGameState();
+    // Start new game
+    startGame();
+  } else {
+    alert(message || "Game ended - returning to lobby");
+    backToLanding();
+  }
+});
+
+// Add vote update handler
+socket.on('voteUpdate', ({ votes, needed }) => {
+  if (document.getElementById('voteStatus')) {
+    document.getElementById('voteStatus').innerText = 
+      `Votes to restart: ${votes} / ${needed}`;
+  }
+});
+
+// Add new leave game immediately function
+function leaveGameImmediately() {
+  if (currentLobbyId) {
+    socket.emit('playerLeft', { lobbyId: currentLobbyId });
+  }
+  backToLanding();
+}
+
+// Remove duplicate socket handler registrations
+socket.removeAllListeners('forceGameStart');
+socket.removeAllListeners('lobbyUpdate');
+socket.removeAllListeners('playerMoved');
+socket.removeAllListeners('playAgainResult');
+socket.removeAllListeners('playerLeft');
+socket.removeAllListeners('voteUpdate');
+socket.removeAllListeners('gameStateSync');
+
+// Add helper function for player initialization
+function initializePlayers(lobby, isPlayer2) {
+  if (isPlayer2) {
+    player2 = createPlayer(socket.id, canvas.width/2 + 60, lobby.players[1].name);
+    player1 = createPlayer(lobby.players[0].id, canvas.width/2 - 100, lobby.players[0].name);
+  } else {
+    player1 = createPlayer(socket.id, canvas.width/2 - 100, lobby.players[0].name);
+    player2 = createPlayer(lobby.players[1].id, canvas.width/2 + 60, lobby.players[1].name);
+  }
+}
+
+// Add helper function to create player objects
+function createPlayer(id, x, name) {
+  return {
+    id: id,
+    x: x,
+    y: canvas.height - 50,
+    width: 40,
+    height: 20,
+    speed: 5,
+    lives: 3,
+    shieldActive: false,
+    shieldCooldown: false,
+    lastShotTime: 0,
+    name: name || "Player"
+  };
+}
+
+// Re-register the event handlers
+socket.on("lobbyUpdate", (lobby) => {
+  console.log('Lobby updated:', lobby);
+  updateLobbyPlayersTable(lobby);
+  
+  if (lobby.players.length === 2) {
+    // Auto-start the game if 2 players have joined
+    document.getElementById("waitingScreen").style.display = "none";
+    
+    // Initialize players based on which ID we are
+    if (socket.id === lobby.players[1].id) {
+      initializePlayers(lobby, true);
+    } else {
+      initializePlayers(lobby, false);
+    }
+    
+    startGame();
+  }
+  
+  // Show start button only to the host when 2 players are present
+  const isHost = socket.id === lobby.players[0]?.id;
+  const hasEnoughPlayers = lobby.players.length === 2;
+  document.getElementById("hostStartButton").style.display = 
+    (isHost && hasEnoughPlayers) ? "block" : "none";
+});
+
+socket.on("forceGameStart", () => {
+  console.log('Force game start received');
+  
+  // Hide ALL UI elements except game
+  const elements = ["waitingScreen", "lobbyScreen", "landingScreen", 
+                   "multiplayerOptions", "guideScreen", "gameOverPopup", "shop"];
+  elements.forEach(id => {
+    const elem = document.getElementById(id);
+    if (elem) elem.style.display = "none";
+  });
+  
+  document.getElementById("gameContainer").style.display = "block";
+  
+  // Initialize players
+  const currentLobby = lobbies.find(l => l.id === currentLobbyId);
+  if (currentLobby && currentLobby.players.length === 2) {
+    if (socket.id === currentLobby.players[1].id) {
+      initializePlayers(currentLobby, true);
+    } else {
+      initializePlayers(currentLobby, false);
+    }
+  }
+  
+  initGame();
+});
+
+// Fix the draw function to properly handle frame timing
+function draw(currentTime) {
+  if (gamePaused) return;
+
+  // Request next frame first to ensure continuous animation
+  animationFrameId = requestAnimationFrame(draw);
+  
+  if (!currentTime) currentTime = performance.now();
+  
+  const deltaTime = currentTime - lastTime;
+  if (deltaTime < FRAME_TIME) return; // Skip this frame if too soon
+  
+  lastTime = currentTime;
+  
+  // Clear the canvas
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
+  // Game logic
+  handlePlayerMovement();
+  updateInvaders();
+  updateBullets();
+  
+  // Draw game elements
+  drawInvaders();
+  drawBarriers();
+  drawPlayers();
+  
+  // Draw bullets
+  ctx.fillStyle = 'yellow';
+  bullets.forEach(bullet => ctx.fillRect(bullet.x, bullet.y, 5, 10));
+  ctx.fillStyle = 'red';
+  invaderBullets.forEach(bullet => ctx.fillRect(bullet.x, bullet.y, 5, 10));
+  
+  // Check for level completion
+  if (checkAllEnemiesDefeated() && !nextLevelScheduled) {
+    nextLevelScheduled = true;
+    setTimeout(() => { nextLevel(); nextLevelScheduled = false; }, 2000);
+  }
+  
+  // Check for game over
+  if ((gameMode === "singleplayer" && player1.lives <= 0) ||
+      (gameMode !== "singleplayer" && player1.lives <= 0 && player2.lives <= 0)) {
+    gameOver();
+    return;
+  }
+}
+
+// Make sure we're using the right function for player movement updates
+socket.on('playerMoved', ({ playerId, x }) => {
+  if (gameMode === "multiplayer_online" && playerId !== socket.id) {
+    if (player1 && player1.id === playerId) {
+      player1.x = x;
+    } else if (player2 && player2.id === playerId) {
+      player2.x = x;
+    }
+  }
+});
+
+// Add functions for game over screen
+function playAgain() {
+  if (gameMode === "multiplayer_online") {
+    votePlayAgain('yes');
+  } else {
+    resetGameState();
+    startGame();
+  }
+}
+
+function leaveGame() {
+  if (gameMode === "multiplayer_online") {
+    votePlayAgain('no');
+  } else {
+    backToLanding();
+  }
+}
+
+// Add manual lobby refresh button
+function refreshLobbies() {
+  console.log('Requesting lobby refresh');
+  socket.emit('requestLobbyList');
+}

@@ -4,14 +4,24 @@ const socketIo = require('socket.io');
 const cors = require('cors');
 
 const app = express();
-app.use(cors());
+// Update CORS configuration
+app.use(cors({
+  origin: "*",
+  methods: ["GET", "POST"],
+  allowedHeaders: ["Content-Type"]
+}));
 
 const server = http.createServer(app);
+// Update Socket.IO configuration
 const io = socketIo(server, {
   cors: {
-    origin: ["http://localhost:3000", "http://localhost:5500", "http://127.0.0.1:5500"],
-    methods: ["GET", "POST"]
-  }
+    origin: "*",
+    methods: ["GET", "POST"],
+    allowedHeaders: ["Content-Type"],
+    credentials: true
+  },
+  transports: ['websocket', 'polling'],
+  path: '/socket.io'
 });
 
 let lobbies = [];
@@ -20,6 +30,15 @@ let playAgainVotes = {}; // Store play again votes for each lobby
 
 io.on('connection', (socket) => {
   console.log('New client connected with ID:', socket.id);
+  
+  // Send initial lobby list on connection
+  socket.emit('lobbyList', lobbies);
+  
+  // Add handler for manual refresh requests
+  socket.on('requestLobbyList', () => {
+    console.log('Lobby list requested by:', socket.id);
+    socket.emit('lobbyList', lobbies);
+  });
 
   socket.on('createLobby', (data) => {
     console.log('Create lobby request received:', data);
@@ -45,25 +64,27 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('joinLobby', ({ lobbyId, joinName, password }) => {
+  socket.on('joinLobby', ({ lobbyId, joinName }) => {
     const lobby = lobbies.find(l => l.id === lobbyId);
     if (!lobby) {
       socket.emit('joinError', { message: 'Lobby not found' });
-      return;
-    }
-    if (lobby.private && lobby.password !== password) {
-      socket.emit('joinError', { message: 'Incorrect password' });
       return;
     }
     if (lobby.players.length >= 2) {
       socket.emit('joinError', { message: 'Lobby is full' });
       return;
     }
+    
+    // Add player to lobby
     lobby.players.push({ id: socket.id, name: joinName });
     socket.join(lobbyId);
+    
+    // Update everyone
     io.emit('lobbyList', lobbies);
     io.to(lobbyId).emit('lobbyUpdate', lobby);
-    socket.emit('lobbyJoined', { lobbyId, lobby });
+    
+    // Send confirmation to joining player
+    socket.emit('joinLobby', { lobbyId, lobby });
   });
 
   socket.on('cancelLobby', ({ lobbyId }) => {
@@ -78,12 +99,18 @@ io.on('connection', (socket) => {
     socket.to(lobbyId).emit('gameStateUpdate', state);
   });
 
-  socket.on('playerMove', ({ lobbyId, playerId, x, y }) => {
+  // Update player movement handler for immediate sync
+  socket.on('playerMove', ({ lobbyId, playerId, x }) => {
+    // Broadcast immediately to all clients in the lobby
+    io.to(lobbyId).emit('playerMoved', { playerId, x });
+    
+    // Update game state
     if (gameStates[lobbyId]) {
-      gameStates[lobbyId].players = gameStates[lobbyId].players || {};
-      gameStates[lobbyId].players[playerId] = { x, y };
+      if (!gameStates[lobbyId].players) {
+        gameStates[lobbyId].players = {};
+      }
+      gameStates[lobbyId].players[playerId] = { x };
     }
-    socket.to(lobbyId).emit('playerMoved', { playerId, x, y });
   });
 
   socket.on('playerShoot', ({ lobbyId, playerId, bulletData }) => {
@@ -124,6 +151,8 @@ io.on('connection', (socket) => {
       socket.emit('gameStartError', 'Need 2 players to start');
       return;
     }
+    
+    // Force start the game for all players in the lobby
     io.to(lobbyId).emit('forceGameStart');
   });
 
@@ -177,6 +206,20 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('playerLeft', ({ lobbyId }) => {
+    const lobby = lobbies.find(l => l.id === lobbyId);
+    if (lobby) {
+      io.to(lobbyId).emit('playerLeft', { 
+        message: 'A player left the game. This lobby cannot continue.' 
+      });
+      // Clean up lobby data
+      delete gameStates[lobbyId];
+      delete playAgainVotes[lobbyId];
+      lobbies = lobbies.filter(l => l.id !== lobbyId);
+      io.emit('lobbyList', lobbies);
+    }
+  });
+
   socket.on('disconnect', () => {
     console.log('Client disconnected:', socket.id);
     lobbies.forEach(lobby => {
@@ -196,6 +239,16 @@ io.on('connection', (socket) => {
     io.emit('lobbyList', lobbies);
     console.log('Client disconnected');
   });
+
+  // Send lobby list with all necessary info to clients
+  socket.on('requestLobbyData', ({ lobbyId }) => {
+    const lobby = lobbies.find(l => l.id === lobbyId);
+    if (lobby) {
+      socket.emit('lobbyData', lobby);
+    } else {
+      socket.emit('joinError', { message: 'Lobby not found' });
+    }
+  });
 });
 
 // Serve static files from public directory
@@ -207,6 +260,6 @@ server.on('error', (error) => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server is running on port ${PORT}`);
 });
